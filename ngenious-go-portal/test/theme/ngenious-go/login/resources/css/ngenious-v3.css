@@ -1,0 +1,193 @@
+:root {
+  --ng-ink: #102236;
+  --ng-top-bar: #0d1c2c;
+  --ng-muted: #637487;
+  --ng-cyan: #19c1ca;
+  --ng-cyan-dark: #0b747b;
+  --ng-line: #dfe7ec;
+  --ng-surface: #f4f7f8;
+  --ng-white: #ffffff;
+  --ng-critical: #c83c45;
+  --pf-v5-global--primary-color--100: var(--ng-cyan-dark);
+  --pf-v5-global--primary-color--200: #07545a;
+  --keycloak-card-top-color: var(--ng-cyan);
+}
+
+html,
+body {
+  min-height: 100%;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.login-pf body {
+  background:
+    radial-gradient(circle at 12% 18%, rgba(25, 193, 202, 0.18), transparent 30rem),
+    linear-gradient(135deg, #102337 0%, #113d54 55%, #0b6268 100%);
+  color: var(--ng-ink);
+}
+
+.pf-v5-c-login {
+  min-height: 100vh;
+  align-items: center;
+  padding: 2rem 1.25rem;
+}
+
+.pf-v5-c-login__container {
+  grid-template-columns: minmax(0, 100%);
+  grid-template-areas:
+    "header"
+    "main";
+  row-gap: 2rem;
+  width: 100%;
+  max-width: 31rem;
+}
+
+.pf-v5-c-login__header {
+  margin: 0;
+  text-align: center;
+}
+
+#kc-header-wrapper {
+  box-sizing: content-box;
+  width: min(250px, 72vw);
+  height: 38px;
+  margin: 0 auto;
+  color: transparent !important;
+  font-size: 0;
+  letter-spacing: normal;
+  line-height: 1;
+  text-transform: none;
+  background: url("../img/ngenious-logo.png") no-repeat top center / contain;
+}
+
+.pf-v5-c-login__main {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 14px;
+  box-shadow: 0 22px 55px rgba(4, 17, 29, 0.34);
+}
+
+.pf-v5-c-login__main-header {
+  padding: 2rem 2rem 1.25rem;
+  border-top: 5px solid var(--ng-cyan);
+}
+
+.pf-v5-c-login__main-body {
+  padding: 0 2rem 1.5rem;
+}
+
+.pf-v5-c-login__main-footer {
+  background: var(--ng-surface);
+}
+
+#kc-page-title {
+  color: var(--ng-ink);
+  font-size: clamp(1.65rem, 4vw, 2rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  text-align: center;
+  white-space: normal;
+}
+
+.pf-v5-c-form__label-text {
+  color: var(--ng-ink);
+  font-weight: 700;
+}
+
+.pf-v5-c-form-control {
+  min-height: 2.9rem;
+  border-radius: 7px;
+  --pf-v5-c-form-control--before--BorderColor: #9aacba;
+  --pf-v5-c-form-control--hover--before--BorderBottomColor: var(--ng-cyan-dark);
+  --pf-v5-c-form-control--focus--before--BorderBottomColor: var(--ng-cyan-dark);
+  --pf-v5-c-form-control--after--BorderBottomColor: var(--ng-cyan-dark);
+  --pf-v5-c-form-control--focus--after--BorderBottomColor: var(--ng-cyan-dark);
+}
+
+.pf-v5-c-button.pf-m-primary,
+input[type="submit"].pf-v5-c-button.pf-m-primary {
+  min-height: 2.9rem;
+  border-radius: 7px;
+  color: var(--ng-ink);
+  font-weight: 700;
+  background: var(--ng-cyan);
+  --pf-v5-c-button--m-primary--BackgroundColor: var(--ng-cyan);
+  --pf-v5-c-button--m-primary--hover--BackgroundColor: #20d3dc;
+  --pf-v5-c-button--m-primary--focus--BackgroundColor: #20d3dc;
+  --pf-v5-c-button--m-primary--active--BackgroundColor: #15aeb7;
+}
+
+a {
+  color: var(--ng-cyan-dark);
+  font-weight: 600;
+  text-underline-offset: 0.18em;
+}
+
+a:hover {
+  color: #07545a;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid var(--ng-cyan-dark);
+  outline-offset: 3px;
+}
+
+.pf-v5-c-alert.pf-m-danger {
+  --pf-v5-c-alert--m-danger--BorderTopColor: var(--ng-critical);
+}
+
+.ngenious-login-footer {
+  padding: 1rem 2rem 1.25rem;
+  border-top: 1px solid var(--ng-line);
+  color: var(--ng-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.ngenious-login-footer p {
+  margin: 0;
+}
+
+.ngenious-login-footer p + p {
+  margin-top: 0.4rem;
+}
+
+@media (max-width: 575px) {
+  .pf-v5-c-login {
+    align-items: start;
+    padding: 1.5rem 1rem;
+  }
+
+  .pf-v5-c-login__container {
+    row-gap: 1.15rem;
+  }
+
+  .pf-v5-c-login__main-header {
+    padding: 1.5rem 1.25rem 1rem;
+  }
+
+  .pf-v5-c-login__main-body {
+    padding: 0 1.25rem 1.25rem;
+  }
+
+  .ngenious-login-footer {
+    padding: 1rem 1.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

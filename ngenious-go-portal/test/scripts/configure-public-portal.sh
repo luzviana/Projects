@@ -6,8 +6,11 @@ CADDY_IMAGE='docker.io/library/caddy@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79
 KEYCLOAK_ENV=/opt/go-portal/secrets/keycloak.env
 KEYCLOAK_ENV_BACKUP=/opt/go-portal/secrets/keycloak.env.pre-public
 CADDY_ROOT=/opt/go-portal/caddy
+THEME_ROOT=/opt/go-portal/theme/ngenious-go
 
 test -s "$CADDY_ROOT/Caddyfile"
+test -s "$THEME_ROOT/login/theme.properties"
+test -s "$THEME_ROOT/login/resources/img/ngenious-logo.png"
 
 docker pull "$CADDY_IMAGE"
 cp -p "$KEYCLOAK_ENV" "$KEYCLOAK_ENV_BACKUP"
@@ -47,6 +50,7 @@ docker run -d \
   --network go-portal \
   --env-file "$KEYCLOAK_ENV" \
   --mount type=bind,src=/opt/go-portal/import,dst=/opt/keycloak/data/import,readonly \
+  --mount type=bind,src="$THEME_ROOT",dst=/opt/keycloak/themes/ngenious-go,readonly \
   --publish 127.0.0.1:8080:8080 \
   --log-driver journald \
   "$KEYCLOAK_IMAGE" \
@@ -85,4 +89,3 @@ docker run -d \
   caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
 
 echo 'Public customer portal configuration completed'
-

@@ -60,10 +60,19 @@ values into terminals, tickets, or logs.
 management port, or the administration console.
 
 After DNS points `got.ngenious.app` to the stack output, place `Caddyfile` at
-`/opt/go-portal/caddy/Caddyfile` on the host and run
+`/opt/go-portal/caddy/Caddyfile` and the version-controlled `theme/ngenious-go`
+directory at `/opt/go-portal/theme/ngenious-go` on the host, then run
 `scripts/configure-public-portal.sh` through Systems Manager. Caddy obtains and
 renews HTTPS automatically. Public requests to `/admin` and the master realm are
 answered with 404; administration continues through the Systems Manager tunnel.
+
+Run `scripts/configure-login-theme.sh` after the themed Keycloak container is
+ready. The script activates the `ngenious-go` login theme only for the test realm
+and verifies the saved realm setting. The theme extends Keycloak's built-in v2
+login theme, includes the approved ngenious logo locally, and preserves the
+standard authentication templates. Its checked-in `css/styles.css` is the exact
+base stylesheet from the pinned Keycloak 26.7.0 release and must be refreshed
+when the Keycloak image is upgraded.
 
 Run `scripts/configure-test-realm-security.sh` after public exposure to enable
 the version-controlled test-realm brute-force delay and temporary lockout policy.
