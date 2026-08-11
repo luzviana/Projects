@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Public HTTPS edge for the ngenious Go Portal shared-test customer portal
+
+Parameters:
+  InstanceId:
+    Type: AWS::EC2::Instance::Id
+    Default: i-062e1111883bc9e38
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Default: sg-0f0a0fa88c2187884
+
+Resources:
+  PortalAddress:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref InstanceId
+      Tags:
+        - Key: Name
+          Value: ngenious-go-portal-test-public
+        - Key: Project
+          Value: ngenious-go-portal
+        - Key: Environment
+          Value: test
+        - Key: Purpose
+          Value: customer-portal-https
+
+  HttpIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: HTTP for certificate validation and HTTPS redirect
+      GroupId: !Ref SecurityGroupId
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      CidrIp: 0.0.0.0/0
+
+  HttpsIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Public customer portal HTTPS
+      GroupId: !Ref SecurityGroupId
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: 0.0.0.0/0
+
+Outputs:
+  PublicIp:
+    Description: Stable IPv4 address for got.ngenious.app
+    Value: !GetAtt PortalAddress.PublicIp
+  AllocationId:
+    Value: !GetAtt PortalAddress.AllocationId
+

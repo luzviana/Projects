@@ -53,6 +53,18 @@ port `8080`, then open `http://localhost:18080`.
 The instance ID and secret names are CloudFormation outputs. Do not print secret
 values into terminals, tickets, or logs.
 
+## Public customer portal
+
+`public-ingress.yaml` creates the stable IPv4 address and opens only ports 80 and
+443 for `got.ngenious.app`. It does not expose SSH, Keycloak port 8080, the
+management port, or the administration console.
+
+After DNS points `got.ngenious.app` to the stack output, place `Caddyfile` at
+`/opt/go-portal/caddy/Caddyfile` on the host and run
+`scripts/configure-public-portal.sh` through Systems Manager. Caddy obtains and
+renews HTTPS automatically. Public requests to `/admin` and the master realm are
+answered with 404; administration continues through the Systems Manager tunnel.
+
 ## Synthetic organizations
 
 Run `scripts/seed-prototype-organizations.sh` on the test instance through an
