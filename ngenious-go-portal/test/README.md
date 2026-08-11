@@ -65,6 +65,9 @@ After DNS points `got.ngenious.app` to the stack output, place `Caddyfile` at
 renews HTTPS automatically. Public requests to `/admin` and the master realm are
 answered with 404; administration continues through the Systems Manager tunnel.
 
+Run `scripts/configure-test-realm-security.sh` after public exposure to enable
+the version-controlled test-realm brute-force delay and temporary lockout policy.
+
 ## Synthetic organizations
 
 Run `scripts/seed-prototype-organizations.sh` on the test instance through an
