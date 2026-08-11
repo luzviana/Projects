@@ -127,8 +127,7 @@ Resources:
     Properties:
       ImageId: !Ref AmiId
       InstanceType: !Ref InstanceType
-      IamInstanceProfile:
-        Name: !Ref InstanceProfile
+      IamInstanceProfile: !Ref InstanceProfile
       SubnetId: !Ref SubnetId
       SecurityGroupIds:
         - !Ref SecurityGroup
