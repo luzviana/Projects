@@ -159,9 +159,10 @@ Resources:
           exec > >(tee -a /var/log/go-portal-bootstrap.log) 2>&1
 
           echo 'Installing the minimal runtime'
-          dnf install -y docker jq iptables-services
+          dnf install -y cronie docker jq iptables-services
           systemctl enable --now amazon-ssm-agent
           systemctl enable --now docker
+          systemctl enable --now crond
 
           install -d -m 0700 /opt/go-portal/secrets
           install -d -m 0750 /opt/go-portal/postgres /opt/go-portal/backups /opt/go-portal/import
@@ -280,6 +281,7 @@ Resources:
           find /opt/go-portal/backups -maxdepth 1 -type f -name 'keycloak-*.dump' -printf '%T@ %p\n' | sort -rn | awk 'NR > 7 {print $2}' | xargs -r rm -f
           BACKUP
           chmod 0750 /usr/local/sbin/go-portal-backup
+          install -d -m 0755 /etc/cron.d
           printf '15 3 * * * root /usr/local/sbin/go-portal-backup\n' > /etc/cron.d/go-portal-backup
           chmod 0644 /etc/cron.d/go-portal-backup
 
