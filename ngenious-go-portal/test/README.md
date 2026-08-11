@@ -52,3 +52,10 @@ port `8080`, then open `http://localhost:18080`.
 
 The instance ID and secret names are CloudFormation outputs. Do not print secret
 values into terminals, tickets, or logs.
+
+## Synthetic organizations
+
+Run `scripts/seed-prototype-organizations.sh` on the test instance through an
+approved Systems Manager command. It idempotently creates the two synthetic
+organizations used by Prototype A and reads the temporary administrator only
+from Secrets Manager.
