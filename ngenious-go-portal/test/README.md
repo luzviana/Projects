@@ -83,3 +83,32 @@ Run `scripts/seed-prototype-organizations.sh` on the test instance through an
 approved Systems Manager command. It idempotently creates the two synthetic
 organizations used by Prototype A and reads the temporary administrator only
 from Secrets Manager.
+
+For Prototype A customer-administrator isolation, run
+`scripts/provision-prototype-admin-secrets.sh` from an approved operator machine.
+It creates two generated shared-test credentials in Secrets Manager and grants
+only the test instance role permission to read them. Then run
+`scripts/seed-prototype-customer-admins.sh` and
+`scripts/validate-prototype-customer-isolation.sh` on the instance through
+Systems Manager. No generated password, access token, or secret value is stored
+in Git or printed by these scripts.
+
+The customer administrators receive the query-only `query-organizations` and
+`query-users` navigation roles plus a fine-grained `view` and `manage`
+permission for their assigned synthetic
+organization. The prototype also grants each administrator user-level `view`
+and `manage` permission only to that administrator's own synthetic user record,
+because Keycloak separately applies user permissions when returning organization
+members. The query-only roles expose no user or organization record unless a
+fine-grained permission also permits it. The administrators do not receive
+realm-wide view or management roles. Keycloak
+26.7 currently makes organization `manage` broader than ngenious needs because
+it includes organization updates and deletion, not only member invitations and
+membership. This permission is therefore for the synthetic prototype only. Real
+customer administrators must use an ngenious-controlled restricted management
+surface unless a future Keycloak release adds member-only organization scopes.
+Keycloak's delegated administration API also returns basic realm metadata needed
+to load its own administration interface. The customer-facing portal must not
+expose the native Keycloak administration console; tests must instead confirm
+that clients, roles, authentication flows, and unauthorized user records remain
+denied.
