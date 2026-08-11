@@ -1,0 +1,54 @@
+# ngenious Go Portal — shared-test prototype
+
+## Approved footprint
+
+- AWS account profile: `ai-coder` (`919519434125`)
+- Region: `us-east-1`
+- Existing VPC: `vpc-07bd3f5eb5ecaa0b1`
+- Subnet: `subnet-0a414d17ab28e035f` (`us-east-1a`)
+- One ARM `t4g.medium` EC2 instance
+- One 20 GiB encrypted `gp3` root volume
+- Keycloak 26.7.0 and PostgreSQL 17.6 on the same instance
+- AWS Systems Manager access; no inbound security-group rules
+- No DNS, SES, load balancer, NAT gateway, AWS monitoring, or automatic recovery
+
+The VPC is shared with Media Monitoring and has peering routes to private
+networks. The instance has a dedicated security group with no inbound rules.
+Host and container firewall rules reject traffic to RFC1918 private networks,
+apart from the VPC DNS resolver and the isolated container network.
+
+## Deploy
+
+Validate the template first:
+
+```sh
+aws cloudformation validate-template \
+  --profile ai-coder \
+  --region us-east-1 \
+  --template-body file://template.yaml
+```
+
+Create the stack:
+
+```sh
+aws cloudformation deploy \
+  --profile ai-coder \
+  --region us-east-1 \
+  --stack-name ngenious-go-portal-test \
+  --template-file template.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --no-fail-on-empty-changeset
+```
+
+No secret values are accepted as parameters or stored in Git. CloudFormation
+creates random database and bootstrap-administrator passwords in AWS Secrets
+Manager.
+
+## Access
+
+The Keycloak HTTP port is bound only to the instance loopback interface. Use an
+AWS Systems Manager port-forwarding session to map local port `18080` to remote
+port `8080`, then open `http://localhost:18080`.
+
+The instance ID and secret names are CloudFormation outputs. Do not print secret
+values into terminals, tickets, or logs.

@@ -1,0 +1,300 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Low-cost ngenious Go Portal shared-test prototype
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Default: vpc-07bd3f5eb5ecaa0b1
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Default: subnet-0a414d17ab28e035f
+  AmiId:
+    Type: AWS::EC2::Image::Id
+    Default: ami-09317ccfac89b432d
+  InstanceType:
+    Type: String
+    Default: t4g.medium
+    AllowedValues:
+      - t4g.medium
+  KeycloakImage:
+    Type: String
+    Default: quay.io/keycloak/keycloak@sha256:0f198be292568439d700cdbfb893e69a6009bb43a94a06a945b1d3d506c76b13
+  PostgresImage:
+    Type: String
+    Default: docker.io/library/postgres@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+
+Resources:
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: ngenious-go-portal/test/database
+      Description: PostgreSQL credential for the ngenious Go Portal test prototype
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"keycloak"}'
+        GenerateStringKey: password
+        PasswordLength: 36
+        ExcludeCharacters: '"@/\\'
+      Tags:
+        - Key: Project
+          Value: ngenious-go-portal
+        - Key: Environment
+          Value: test
+
+  BootstrapAdminSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: ngenious-go-portal/test/bootstrap-admin
+      Description: Temporary Keycloak bootstrap administrator for the test prototype
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"goportal-bootstrap"}'
+        GenerateStringKey: password
+        PasswordLength: 36
+        ExcludeCharacters: '"@/\\'
+      Tags:
+        - Key: Project
+          Value: ngenious-go-portal
+        - Key: Environment
+          Value: test
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ngenious-go-portal-test-instance
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: read-go-portal-test-secrets
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DatabaseSecret
+                  - !Ref BootstrapAdminSecret
+      Tags:
+        - Key: Project
+          Value: ngenious-go-portal
+        - Key: Environment
+          Value: test
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: ngenious-go-portal-test-instance
+      Roles:
+        - !Ref InstanceRole
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: No inbound access; restricted egress for Go Portal test
+      VpcId: !Ref VpcId
+      SecurityGroupIngress: []
+      SecurityGroupEgress:
+        - Description: HTTPS for SSM, package repositories, and container registries
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - Description: DNS over UDP to the VPC resolver
+          IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 172.31.0.2/32
+        - Description: DNS over TCP to the VPC resolver
+          IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 172.31.0.2/32
+      Tags:
+        - Key: Name
+          Value: ngenious-go-portal-test
+        - Key: Project
+          Value: ngenious-go-portal
+        - Key: Environment
+          Value: test
+
+  Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile:
+        Name: !Ref InstanceProfile
+      SubnetId: !Ref SubnetId
+      SecurityGroupIds:
+        - !Ref SecurityGroup
+      MetadataOptions:
+        HttpEndpoint: enabled
+        HttpTokens: required
+        HttpPutResponseHopLimit: 1
+        InstanceMetadataTags: enabled
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            DeleteOnTermination: true
+            Encrypted: true
+            VolumeSize: 20
+            VolumeType: gp3
+      Tags:
+        - Key: Name
+          Value: ngenious-go-portal-test
+        - Key: Project
+          Value: ngenious-go-portal
+        - Key: Environment
+          Value: test
+        - Key: CostCenter
+          Value: prototype
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euo pipefail
+          exec > >(tee -a /var/log/go-portal-bootstrap.log) 2>&1
+
+          echo 'Installing the minimal runtime'
+          dnf install -y docker jq iptables-services
+          systemctl enable --now amazon-ssm-agent
+          systemctl enable --now docker
+
+          install -d -m 0700 /opt/go-portal/secrets
+          install -d -m 0750 /opt/go-portal/postgres /opt/go-portal/backups /opt/go-portal/import
+
+          DB_JSON=$(aws secretsmanager get-secret-value --region ${AWS::Region} --secret-id '${DatabaseSecret}' --query SecretString --output text)
+          ADMIN_JSON=$(aws secretsmanager get-secret-value --region ${AWS::Region} --secret-id '${BootstrapAdminSecret}' --query SecretString --output text)
+          DB_USER=$(printf '%s' "$DB_JSON" | jq -r .username)
+          DB_PASSWORD=$(printf '%s' "$DB_JSON" | jq -r .password)
+          ADMIN_USER=$(printf '%s' "$ADMIN_JSON" | jq -r .username)
+          ADMIN_PASSWORD=$(printf '%s' "$ADMIN_JSON" | jq -r .password)
+
+          umask 077
+          printf 'POSTGRES_DB=keycloak\nPOSTGRES_USER=%s\nPOSTGRES_PASSWORD=%s\n' "$DB_USER" "$DB_PASSWORD" > /opt/go-portal/secrets/postgres.env
+          printf 'KC_DB=postgres\nKC_DB_URL=jdbc:postgresql://postgres:5432/keycloak\nKC_DB_USERNAME=%s\nKC_DB_PASSWORD=%s\nKC_BOOTSTRAP_ADMIN_USERNAME=%s\nKC_BOOTSTRAP_ADMIN_PASSWORD=%s\nKC_HTTP_ENABLED=true\nKC_HOSTNAME=http://localhost:18080\nKC_HEALTH_ENABLED=true\nKC_METRICS_ENABLED=false\n' "$DB_USER" "$DB_PASSWORD" "$ADMIN_USER" "$ADMIN_PASSWORD" > /opt/go-portal/secrets/keycloak.env
+          unset DB_JSON ADMIN_JSON DB_PASSWORD ADMIN_PASSWORD
+
+          cat > /opt/go-portal/import/go-portal-test-realm.json <<'REALM'
+          {
+            "realm": "go-portal-test",
+            "displayName": "ngenious Go Portal Test",
+            "enabled": true,
+            "organizationsEnabled": true,
+            "registrationAllowed": false,
+            "registrationEmailAsUsername": true,
+            "loginWithEmailAllowed": true,
+            "duplicateEmailsAllowed": false,
+            "resetPasswordAllowed": true,
+            "rememberMe": false,
+            "verifyEmail": false,
+            "accessTokenLifespan": 300,
+            "ssoSessionIdleTimeout": 1800,
+            "ssoSessionMaxLifespan": 28800,
+            "passwordPolicy": "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)"
+          }
+          REALM
+          chmod 0640 /opt/go-portal/import/go-portal-test-realm.json
+
+          docker network create --subnet 172.30.0.0/24 go-portal
+
+          docker run -d \
+            --name postgres \
+            --restart unless-stopped \
+            --memory 768m \
+            --cpus 0.5 \
+            --network go-portal \
+            --env-file /opt/go-portal/secrets/postgres.env \
+            --mount type=bind,src=/opt/go-portal/postgres,dst=/var/lib/postgresql/data \
+            --log-driver journald \
+            '${PostgresImage}'
+
+          for attempt in $(seq 1 60); do
+            if docker exec postgres pg_isready -U "$DB_USER" -d keycloak >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+
+          docker run -d \
+            --name keycloak \
+            --restart unless-stopped \
+            --memory 2304m \
+            --cpus 1.5 \
+            --network go-portal \
+            --env-file /opt/go-portal/secrets/keycloak.env \
+            --mount type=bind,src=/opt/go-portal/import,dst=/opt/keycloak/data/import,readonly \
+            --publish 127.0.0.1:8080:8080 \
+            --log-driver journald \
+            '${KeycloakImage}' \
+            start --import-realm
+
+          cat > /usr/local/sbin/go-portal-firewall <<'FIREWALL'
+          #!/bin/bash
+          set -euo pipefail
+          iptables -C OUTPUT -p udp -d 172.31.0.2 --dport 53 -j ACCEPT 2>/dev/null || iptables -I OUTPUT 1 -p udp -d 172.31.0.2 --dport 53 -j ACCEPT
+          iptables -C OUTPUT -p tcp -d 172.31.0.2 --dport 53 -j ACCEPT 2>/dev/null || iptables -I OUTPUT 1 -p tcp -d 172.31.0.2 --dport 53 -j ACCEPT
+          iptables -C DOCKER-USER -s 172.30.0.0/24 -d 172.30.0.0/24 -j ACCEPT 2>/dev/null || iptables -I DOCKER-USER 1 -s 172.30.0.0/24 -d 172.30.0.0/24 -j ACCEPT
+          for cidr in 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16; do
+            iptables -C OUTPUT -d "$cidr" -j REJECT 2>/dev/null || iptables -A OUTPUT -d "$cidr" -j REJECT
+            iptables -C DOCKER-USER -d "$cidr" -j REJECT 2>/dev/null || iptables -I DOCKER-USER 2 -d "$cidr" -j REJECT
+          done
+          FIREWALL
+          chmod 0750 /usr/local/sbin/go-portal-firewall
+
+          cat > /etc/systemd/system/go-portal-firewall.service <<'UNIT'
+          [Unit]
+          Description=Block Go Portal prototype access to private networks
+          After=docker.service network-online.target
+          Requires=docker.service
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/local/sbin/go-portal-firewall
+          RemainAfterExit=yes
+
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
+          systemctl daemon-reload
+          systemctl enable --now go-portal-firewall.service
+
+          install -d -m 0755 /etc/systemd/journald.conf.d
+          cat > /etc/systemd/journald.conf.d/go-portal-retention.conf <<'JOURNAL'
+          [Journal]
+          MaxRetentionSec=30day
+          SystemMaxUse=2G
+          JOURNAL
+          systemctl restart systemd-journald
+
+          cat > /usr/local/sbin/go-portal-backup <<'BACKUP'
+          #!/bin/bash
+          set -euo pipefail
+          stamp=$(date -u +%Y%m%dT%H%M%SZ)
+          target=/opt/go-portal/backups/keycloak-$stamp.dump
+          umask 077
+          docker exec postgres pg_dump -U keycloak -Fc keycloak > "$target"
+          find /opt/go-portal/backups -maxdepth 1 -type f -name 'keycloak-*.dump' -printf '%T@ %p\n' | sort -rn | awk 'NR > 7 {print $2}' | xargs -r rm -f
+          BACKUP
+          chmod 0750 /usr/local/sbin/go-portal-backup
+          printf '15 3 * * * root /usr/local/sbin/go-portal-backup\n' > /etc/cron.d/go-portal-backup
+          chmod 0644 /etc/cron.d/go-portal-backup
+
+          echo 'ngenious Go Portal prototype bootstrap completed'
+
+Outputs:
+  InstanceId:
+    Description: EC2 instance used by the Go Portal test prototype
+    Value: !Ref Instance
+  DatabaseSecretName:
+    Value: !Ref DatabaseSecret
+  BootstrapAdminSecretName:
+    Value: !Ref BootstrapAdminSecret
+  PortForwardCommand:
+    Description: Requires the AWS Session Manager plugin on the operator computer
+    Value: !Sub >-
+      aws ssm start-session --profile ai-coder --region ${AWS::Region} --target ${Instance} --document-name AWS-StartPortForwardingSession --parameters portNumber=8080,localPortNumber=18080
