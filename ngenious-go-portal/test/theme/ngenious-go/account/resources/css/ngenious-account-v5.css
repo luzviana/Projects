@@ -37,6 +37,31 @@
   display: none;
 }
 
+.pf-v5-c-masthead .ngenious-original-avatar {
+  display: none !important;
+}
+
+.pf-v5-c-masthead .ngenious-user-menu-container {
+  margin-left: auto;
+}
+
+.pf-v5-c-masthead .ngenious-user-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  min-width: 3rem;
+  height: 3rem;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 50%;
+  background: transparent !important;
+}
+
+.pf-v5-c-masthead .ngenious-user-menu-trigger > :not(.ngenious-user-initials) {
+  display: none !important;
+}
+
 .ngenious-user-initials {
   display: inline-flex;
   align-items: center;
@@ -51,6 +76,7 @@
   letter-spacing: 0.04em;
   line-height: 1;
   background: #ffffff;
+  pointer-events: none;
 }
 
 .pf-v5-c-button.pf-m-primary {

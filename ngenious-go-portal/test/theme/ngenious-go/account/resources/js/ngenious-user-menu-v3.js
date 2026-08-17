@@ -27,18 +27,34 @@
     return [firstName, lastName].filter(Boolean).join(" ");
   }
 
+  function findUserMenuButton(masthead, avatar) {
+    return Array.from(masthead.querySelectorAll("button")).find((button) => {
+      const label = button.textContent.trim();
+      const isMenuToggle =
+        button.hasAttribute("aria-expanded") ||
+        button.hasAttribute("aria-haspopup") ||
+        button.classList.contains("pf-v5-c-menu-toggle") ||
+        button.classList.contains("pf-v5-c-dropdown__toggle");
+
+      return label && isMenuToggle && !button.contains(avatar);
+    });
+  }
+
   function applyInitials() {
     document.querySelectorAll(avatarSelector).forEach((avatar) => {
       if (avatar.dataset.ngeniousInitials === "true") {
         return;
       }
 
-      const button = avatar.closest("button");
+      const masthead = avatar.closest(".pf-v5-c-masthead");
+      const avatarButton = avatar.closest("button");
+      const menuButton = masthead && findUserMenuButton(masthead, avatar);
       const name =
+        profileName() ||
         avatar.getAttribute("alt")?.trim() ||
-        button?.getAttribute("aria-label")?.trim() ||
-        button?.getAttribute("title")?.trim() ||
-        profileName();
+        avatarButton?.getAttribute("aria-label")?.trim() ||
+        menuButton?.textContent?.trim() ||
+        avatarButton?.getAttribute("title")?.trim();
       const initials = initialsFromName(name || "");
 
       if (!initials) {
@@ -54,7 +70,26 @@
       avatar.dataset.ngeniousInitials = "true";
       avatar.classList.add("ngenious-user-avatar-image");
       avatar.setAttribute("aria-hidden", "true");
-      avatar.insertAdjacentElement("afterend", badge);
+
+      if (!menuButton) {
+        avatar.insertAdjacentElement("afterend", badge);
+        return;
+      }
+
+      const avatarItem = avatar.closest(".pf-v5-c-toolbar__item");
+      const menuItem = menuButton.closest(".pf-v5-c-toolbar__item");
+
+      menuButton.classList.add("ngenious-user-menu-trigger");
+      menuButton.setAttribute("aria-label", `Open account menu for ${name}`);
+      menuButton.append(badge);
+      menuItem?.classList.add("ngenious-user-menu-container");
+
+      if (avatarItem && menuItem && avatarItem !== menuItem) {
+        if (avatarItem.parentElement === menuItem.parentElement) {
+          avatarItem.parentElement.insertBefore(menuItem, avatarItem);
+        }
+        avatarItem.classList.add("ngenious-original-avatar");
+      }
     });
   }
 
