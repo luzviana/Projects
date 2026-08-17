@@ -1,0 +1,61 @@
+:root {
+  --ng-account-ink: #102236;
+  --ng-account-header: #0d1c2c;
+  --ng-account-cyan: #19c1ca;
+  --ng-account-cyan-dark: #0b747b;
+  --ng-account-line: #dfe7ec;
+  --pf-v5-global--primary-color--100: var(--ng-account-cyan-dark);
+  --pf-v5-global--primary-color--200: #07545a;
+  --pf-v5-global--link--Color: var(--ng-account-cyan-dark);
+  --pf-v5-global--link--Color--hover: #07545a;
+}
+
+.pf-v5-c-masthead {
+  border-bottom: 3px solid var(--ng-account-cyan);
+  background: var(--ng-account-header);
+}
+
+.pf-v5-c-masthead .pf-v5-c-brand {
+  width: min(15.625rem, 30vw);
+  max-width: 100%;
+  height: auto;
+  max-height: 2.375rem;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.pf-v5-c-button.pf-m-primary {
+  color: var(--ng-account-ink);
+  font-weight: 700;
+  background: var(--ng-account-cyan);
+  --pf-v5-c-button--m-primary--BackgroundColor: var(--ng-account-cyan);
+  --pf-v5-c-button--m-primary--hover--BackgroundColor: #20d3dc;
+  --pf-v5-c-button--m-primary--focus--BackgroundColor: #20d3dc;
+  --pf-v5-c-button--m-primary--active--BackgroundColor: #15aeb7;
+}
+
+.pf-v5-c-nav__link.pf-m-current::after,
+.pf-v5-c-nav__link.pf-m-current::before {
+  border-color: var(--ng-account-cyan);
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid var(--ng-account-cyan);
+  outline-offset: 3px;
+}
+
+@media (max-width: 575px) {
+  .pf-v5-c-masthead .pf-v5-c-brand {
+    width: min(12rem, 52vw);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --pf-v5-global--link--Color: var(--ng-account-cyan);
+    --pf-v5-global--link--Color--hover: #54dce3;
+  }
+}

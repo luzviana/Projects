@@ -78,10 +78,12 @@ test application's issuer, validates both services and the public redirect, and
 leaves the stopped pre-migration containers available for rollback review.
 
 Run `scripts/configure-login-theme.sh` after the themed Keycloak container is
-ready. The script activates the `ngenious-go` login theme only for the test realm
-and verifies the saved realm setting. The theme extends Keycloak's built-in v2
-login theme, includes the approved ngenious logo locally, and preserves the
-standard authentication templates. Its checked-in `css/styles.css` is the exact
+ready. The script activates the `ngenious-go` login and account themes for the
+test realm, applies the `ngenious Account` display name, and verifies the saved
+realm settings. The login theme extends Keycloak's built-in v2 theme and the
+account theme extends the built-in v3 Account Console. Both preserve Keycloak's
+standard authentication and self-service behavior while applying the approved
+ngenious branding. The login theme's checked-in `css/styles.css` is the exact
 base stylesheet from the pinned Keycloak 26.7.0 release and must be refreshed
 when the Keycloak image is upgraded.
 

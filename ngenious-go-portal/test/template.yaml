@@ -182,8 +182,10 @@ Resources:
           cat > /opt/go-portal/import/go-portal-test-realm.json <<'REALM'
           {
             "realm": "go-portal-test",
-            "displayName": "ngenious Go Portal Test",
+            "displayName": "ngenious Account",
             "enabled": true,
+            "loginTheme": "ngenious-go",
+            "accountTheme": "ngenious-go",
             "organizationsEnabled": true,
             "registrationAllowed": false,
             "registrationEmailAsUsername": true,
