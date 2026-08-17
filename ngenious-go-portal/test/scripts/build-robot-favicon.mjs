@@ -8,7 +8,7 @@ import { deflateSync, inflateSync } from "node:zlib";
 const scriptRoot = dirname(fileURLToPath(import.meta.url));
 const imageRoot = resolve(scriptRoot, "../theme/ngenious-go/login/resources/img");
 const sourcePath = resolve(imageRoot, "ngenious-logo.png");
-const outputPath = resolve(imageRoot, "favicon.ico");
+const outputPath = resolve(imageRoot, "ngenious-robot-v1.ico");
 const iconSizes = [16, 32, 48, 64];
 
 const source = decodeRgbaPng(await readFile(sourcePath));
