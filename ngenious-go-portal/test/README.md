@@ -71,6 +71,12 @@ answered with 404; administration continues through the Systems Manager tunnel.
 Opening the root of `id.ngenious.app` redirects to the test realm's Keycloak
 account console for self-service password and session management.
 
+For an existing `got.ngenious.app` deployment, stage the reviewed `Caddyfile`
+as `/tmp/Caddyfile.identity` and run `scripts/activate-identity-host.sh` through
+Systems Manager. The script changes only Keycloak's public hostname and the
+test application's issuer, validates both services and the public redirect, and
+leaves the stopped pre-migration containers available for rollback review.
+
 Run `scripts/configure-login-theme.sh` after the themed Keycloak container is
 ready. The script activates the `ngenious-go` login theme only for the test realm
 and verifies the saved realm setting. The theme extends Keycloak's built-in v2
