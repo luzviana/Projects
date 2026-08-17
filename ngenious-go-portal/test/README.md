@@ -165,3 +165,21 @@ deployment script uses Keycloak's offline `bootstrap-admin` command while the
 single test node is stopped. It creates a random local recovery administrator,
 uses it only for this deployment, and deletes it before the script exits. No
 recovery credential is printed or retained.
+
+## Ole Media relying application
+
+Ole Media uses direct application authentication at
+`https://streamer.ngenious.app`; it is not launched from an application portal.
+Run `scripts/provision-media-monitoring-oidc.sh` from an authenticated AWS
+operator shell, then run `scripts/configure-media-monitoring-client.sh` on this
+identity instance through Systems Manager. The first script creates a restricted
+Secrets Manager handoff and a least-privilege instance profile for the existing
+dashboard server. The second idempotently configures the confidential
+`media-monitoring` Keycloak client and writes its client and cookie secrets to
+that handoff without printing either value.
+
+The dashboard-side installation is maintained in the Ole Media repository.
+Its gateway redirects page requests to `id.ngenious.app`, returns authenticated
+users to their original Ole Media URL, and rejects unsigned monitoring-data
+requests with HTTP 401. Ole Media continues to own its application roles and
+customer permissions.
