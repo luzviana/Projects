@@ -1,7 +1,8 @@
 (() => {
   "use strict";
 
-  const avatarSelector = ".pf-v5-c-masthead img.pf-v5-c-avatar";
+  const avatarSelector =
+    ".pf-v5-c-masthead img.pf-v5-c-avatar, .pf-v5-c-masthead svg.pf-v5-c-avatar";
   const prefixPattern = /^(?:user\s+)?avatar(?:\s+(?:for|of))?\s*/i;
 
   function initialsFromName(name) {
