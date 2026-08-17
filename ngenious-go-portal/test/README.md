@@ -10,7 +10,8 @@
 - One 20 GiB encrypted `gp3` root volume
 - Keycloak 26.7.0 and PostgreSQL 17.6 on the same instance
 - AWS Systems Manager access; no inbound security-group rules
-- No DNS, SES, load balancer, NAT gateway, AWS monitoring, or automatic recovery
+- External DNS for `got.ngenious.app` and `id.ngenious.app`; no SES, load
+  balancer, NAT gateway, AWS monitoring, or automatic recovery
 
 The VPC is shared with Media Monitoring and has peering routes to private
 networks. The instance has a dedicated security group with no inbound rules.
@@ -56,15 +57,19 @@ values into terminals, tickets, or logs.
 ## Public customer portal
 
 `public-ingress.yaml` creates the stable IPv4 address and opens only ports 80 and
-443 for `got.ngenious.app`. It does not expose SSH, Keycloak port 8080, the
-management port, or the administration console.
+443. `got.ngenious.app` is the protected relying-party test application;
+`id.ngenious.app` is the permanent Keycloak identity and self-service address.
+Neither hostname exposes SSH, Keycloak port 8080, the management port, or the
+administration console.
 
-After DNS points `got.ngenious.app` to the stack output, place `Caddyfile` at
+After DNS points both hostnames to the stack output, place `Caddyfile` at
 `/opt/go-portal/caddy/Caddyfile` and the version-controlled `theme/ngenious-go`
 directory at `/opt/go-portal/theme/ngenious-go` on the host, then run
 `scripts/configure-public-portal.sh` through Systems Manager. Caddy obtains and
 renews HTTPS automatically. Public requests to `/admin` and the master realm are
 answered with 404; administration continues through the Systems Manager tunnel.
+Opening the root of `id.ngenious.app` redirects to the test realm's Keycloak
+account console for self-service password and session management.
 
 Run `scripts/configure-login-theme.sh` after the themed Keycloak container is
 ready. The script activates the `ngenious-go` login theme only for the test realm

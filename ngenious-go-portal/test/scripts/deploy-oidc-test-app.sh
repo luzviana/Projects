@@ -50,9 +50,9 @@ wait_for_keycloak() {
   local ready=false
   for attempt in $(seq 1 90); do
     if curl --max-time 5 -fsS \
-      -H 'Host: got.ngenious.app' \
+      -H 'Host: id.ngenious.app' \
       http://127.0.0.1:8080/realms/go-portal-test/.well-known/openid-configuration \
-      | jq -e '.issuer == "https://got.ngenious.app/realms/go-portal-test"' >/dev/null; then
+      | jq -e '.issuer == "https://id.ngenious.app/realms/go-portal-test"' >/dev/null; then
       ready=true
       break
     fi
@@ -181,7 +181,7 @@ printf '%s\n' \
   'NODE_ENV=production' \
   'PORT=3000' \
   'APP_BASE_URL=https://got.ngenious.app' \
-  'OIDC_ISSUER=https://got.ngenious.app/realms/go-portal-test' \
+  'OIDC_ISSUER=https://id.ngenious.app/realms/go-portal-test' \
   "OIDC_CLIENT_ID=$CLIENT_ID" \
   "OIDC_CLIENT_SECRET=$client_secret" \
   "SESSION_SECRET=$session_secret" \

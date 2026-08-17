@@ -25,7 +25,7 @@ set_env_value() {
   fi
 }
 
-set_env_value KC_HOSTNAME https://got.ngenious.app
+set_env_value KC_HOSTNAME https://id.ngenious.app
 set_env_value KC_HOSTNAME_ADMIN http://localhost:18080
 set_env_value KC_PROXY_HEADERS xforwarded
 set_env_value KC_PROXY_TRUSTED_ADDRESSES 172.30.0.1
@@ -59,9 +59,9 @@ docker run -d \
 ready=false
 for attempt in $(seq 1 90); do
   if curl --max-time 5 -fsS \
-    -H 'Host: got.ngenious.app' \
+    -H 'Host: id.ngenious.app' \
     http://127.0.0.1:8080/realms/go-portal-test/.well-known/openid-configuration \
-    | jq -e '.issuer == "https://got.ngenious.app/realms/go-portal-test"' >/dev/null; then
+    | jq -e '.issuer == "https://id.ngenious.app/realms/go-portal-test"' >/dev/null; then
     ready=true
     break
   fi
