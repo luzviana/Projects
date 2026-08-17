@@ -37,20 +37,22 @@ body {
   grid-template-areas:
     "header"
     "main";
-  row-gap: 2rem;
+  row-gap: 0;
   width: 100%;
   max-width: 31rem;
 }
 
 .pf-v5-c-login__header {
   margin: 0;
+  padding-bottom: clamp(1.5rem, 5vw, 2.25rem);
   text-align: center;
 }
 
 #kc-header-wrapper {
   box-sizing: content-box;
-  width: min(250px, 72vw);
-  height: 38px;
+  width: min(52%, 15.625rem);
+  aspect-ratio: 125 / 19;
+  height: auto;
   margin: 0 auto;
   color: transparent !important;
   font-size: 0;
@@ -167,7 +169,11 @@ select:focus-visible {
   }
 
   .pf-v5-c-login__container {
-    row-gap: 1.15rem;
+    row-gap: 0;
+  }
+
+  .pf-v5-c-login__header {
+    padding-bottom: 1.5rem;
   }
 
   .pf-v5-c-login__main-header {
