@@ -18,6 +18,7 @@ CADDYFILE_BACKUP=/opt/go-portal/caddy/Caddyfile.pre-oidc-test
 test -s "$APP_SOURCE"
 test -s "$CADDYFILE"
 install -d -m 0750 "$APP_ROOT"
+chmod 0644 "$APP_SOURCE"
 
 ADMIN_JSON=$(aws secretsmanager get-secret-value \
   --region us-east-1 \
@@ -223,8 +224,7 @@ rollback_caddy() {
   set +e
   if [[ -s "$CADDYFILE_BACKUP" ]]; then
     cp -p "$CADDYFILE_BACKUP" "$CADDYFILE"
-    docker exec caddy caddy reload \
-      --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1
+    docker restart caddy >/dev/null 2>&1
   fi
 }
 
@@ -238,8 +238,7 @@ fi
 trap rollback_caddy ERR
 docker exec caddy caddy validate \
   --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
-docker exec caddy caddy reload \
-  --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
+docker restart caddy >/dev/null
 trap - ERR
 
 printf 'Protected OIDC test application deployed with image %s.\n' "$node_image_id"
