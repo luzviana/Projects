@@ -129,3 +129,9 @@ synthetic tester to a new temporary password, starts the constrained Node
 container, checks its health, and reloads Caddy. Keycloak realm and static-resource
 routes remain on port 8080; all other public routes go to the protected test
 application on host-loopback port 3000.
+
+If the historical bootstrap administrator has already been disabled, the
+deployment script uses Keycloak's offline `bootstrap-admin` command while the
+single test node is stopped. It creates a random local recovery administrator,
+uses it only for this deployment, and deletes it before the script exits. No
+recovery credential is printed or retained.
