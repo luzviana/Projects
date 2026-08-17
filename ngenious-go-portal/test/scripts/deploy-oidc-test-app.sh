@@ -109,9 +109,10 @@ client_payload=$(jq -cn \
   --arg client_id "$CLIENT_ID" \
   '{
     clientId: $client_id,
-    name: "ngenious protected OIDC test application",
-    description: "Synthetic shared-test relying party only",
+    name: "ngenious Go Test",
+    description: "Protected authentication test application",
     enabled: true,
+    alwaysDisplayInConsole: true,
     protocol: "openid-connect",
     clientAuthenticatorType: "client-secret",
     publicClient: false,
@@ -120,6 +121,8 @@ client_payload=$(jq -cn \
     directAccessGrantsEnabled: false,
     serviceAccountsEnabled: false,
     frontchannelLogout: true,
+    rootUrl: "https://got.ngenious.app",
+    baseUrl: "/",
     redirectUris: ["https://got.ngenious.app/oidc/callback"],
     webOrigins: ["https://got.ngenious.app"],
     attributes: {

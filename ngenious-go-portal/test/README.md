@@ -87,6 +87,14 @@ ngenious branding. The login theme's checked-in `css/styles.css` is the exact
 base stylesheet from the pinned Keycloak 26.7.0 release and must be refreshed
 when the Keycloak image is upgraded.
 
+Run `scripts/configure-account-overview.sh` after the synthetic organizations
+and protected test application exist. It assigns the ordinary synthetic tester
+to `prototype-alpha` and configures `got.ngenious.app` with a display name,
+home URL, and Account Console visibility. The branded Account Console reads the
+signed-in user's organizations and applications from Keycloak's user-scoped
+Account API; it does not call the administration API or expose the native
+administration console.
+
 The login-tab favicon is the robot-head component extracted without redesign
 from the approved `ngenious-logo.png`. Run
 `scripts/build-robot-favicon.mjs` with Node.js to reproducibly regenerate the
