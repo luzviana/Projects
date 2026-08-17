@@ -74,6 +74,13 @@ standard authentication templates. Its checked-in `css/styles.css` is the exact
 base stylesheet from the pinned Keycloak 26.7.0 release and must be refreshed
 when the Keycloak image is upgraded.
 
+The login-tab favicon is the robot-head component extracted without redesign
+from the approved `ngenious-logo.png`. Run
+`scripts/build-robot-favicon.mjs` with Node.js to reproducibly regenerate the
+16, 32, 48, and 64 pixel images stored in `favicon.ico`. After installing a
+changed theme asset, restart the test Keycloak container. Browsers that retained
+the previous long-lived Keycloak favicon may need one hard refresh.
+
 Run `scripts/configure-test-realm-security.sh` after public exposure to enable
 the version-controlled test-realm brute-force delay and temporary lockout policy.
 
