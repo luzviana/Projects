@@ -11,8 +11,16 @@
 }
 
 .pf-v5-c-masthead {
+  --pf-v5-c-masthead--BackgroundColor: #000000;
+  --pf-v5-c-masthead__main--BackgroundColor: #000000;
+  --pf-v5-c-masthead__content--BackgroundColor: #000000;
   border-bottom: 3px solid var(--ng-account-cyan);
-  background: var(--ng-account-header);
+  background: #000000;
+}
+
+.pf-v5-c-masthead__main,
+.pf-v5-c-masthead__content {
+  background: #000000;
 }
 
 .pf-v5-c-masthead .pf-v5-c-brand {
@@ -22,6 +30,7 @@
   max-height: 2.375rem;
   object-fit: contain;
   object-position: left center;
+  filter: brightness(0) invert(1);
 }
 
 .pf-v5-c-button.pf-m-primary {
