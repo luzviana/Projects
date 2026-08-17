@@ -9,10 +9,10 @@ got.ngenious.app {
 	@administration path /admin* /realms/master*
 	respond @administration 404
 
-	@root path /
-	redir @root /realms/go-portal-test/account/ 302
+	@identity path /realms/go-portal-test/* /resources/*
+	reverse_proxy @identity 127.0.0.1:8080
 
-	reverse_proxy 127.0.0.1:8080
+	reverse_proxy 127.0.0.1:3000
 
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"

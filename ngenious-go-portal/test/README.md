@@ -112,3 +112,20 @@ to load its own administration interface. The customer-facing portal must not
 expose the native Keycloak administration console; tests must instead confirm
 that clients, roles, authentication flows, and unauthorized user records remain
 denied.
+
+## Protected OIDC test application
+
+The direct-authentication prototype uses one ordinary synthetic user,
+`oidc.tester@example.invalid`. It receives no customer-administrator or realm
+roles. Its temporary password is generated on the test host at deployment time,
+shown once to the authorized operator, and changed by the tester during first
+sign-in. It is not stored in Git or Secrets Manager.
+
+Place the reviewed application `server.mjs` at
+`/opt/go-portal/test-app/server.mjs`, install this directory's updated
+`Caddyfile`, and run `scripts/deploy-oidc-test-app.sh` through Systems Manager.
+The script idempotently configures the confidential Keycloak client, resets the
+synthetic tester to a new temporary password, starts the constrained Node
+container, checks its health, and reloads Caddy. Keycloak realm and static-resource
+routes remain on port 8080; all other public routes go to the protected test
+application on host-loopback port 3000.
