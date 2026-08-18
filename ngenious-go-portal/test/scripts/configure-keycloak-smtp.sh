@@ -3,28 +3,13 @@ set -euo pipefail
 
 REALM=go-portal-test
 ADMIN_SECRET=ngenious-go-portal/test/bootstrap-admin
-SMTP_SECRET=${SMTP_SECRET:-ngenious-go-portal/test/smtp}
 KEYCLOAK_CONTAINER=keycloak
 
-SMTP_JSON=$(aws secretsmanager get-secret-value \
-  --region us-east-1 \
-  --secret-id "$SMTP_SECRET" \
-  --query SecretString \
-  --output text)
-
-configured=$(printf '%s' "$SMTP_JSON" | jq -er '.configured')
-[[ "$configured" == true ]] || {
-  printf 'The SMTP secret is not configured. No realm change was made.\n' >&2
-  exit 2
-}
-
-smtp_host=$(printf '%s' "$SMTP_JSON" | jq -er '.host')
-smtp_port=$(printf '%s' "$SMTP_JSON" | jq -er '.port | tostring')
-smtp_user=$(printf '%s' "$SMTP_JSON" | jq -er '.username')
-smtp_password=$(printf '%s' "$SMTP_JSON" | jq -er '.password')
-smtp_from=$(printf '%s' "$SMTP_JSON" | jq -er '.from')
-smtp_from_name=$(printf '%s' "$SMTP_JSON" | jq -er '.fromDisplayName')
-smtp_reply_to=$(printf '%s' "$SMTP_JSON" | jq -r '.replyTo // empty')
+smtp_host=${SMTP_HOST:-smtp-relay.gmail.com}
+smtp_port=${SMTP_PORT:-587}
+smtp_from=${SMTP_FROM:-aws@viana.ooo}
+smtp_from_name=${SMTP_FROM_NAME:-ngenious}
+smtp_reply_to=${SMTP_REPLY_TO:-aws@viana.ooo}
 
 [[ "$smtp_port" =~ ^[1-9][0-9]*$ ]]
 [[ "$smtp_from" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]
@@ -82,7 +67,7 @@ cleanup() {
       kc delete "users/$recovery_admin_id" -r master >/dev/null
     fi
   fi
-  unset SMTP_JSON smtp_password ADMIN_JSON ADMIN_PASSWORD \
+  unset ADMIN_JSON ADMIN_PASSWORD \
     RECOVERY_ADMIN_USER RECOVERY_ADMIN_PASSWORD recovery_admin_id
 }
 trap cleanup EXIT
@@ -116,19 +101,15 @@ unset ADMIN_JSON ADMIN_USER ADMIN_PASSWORD
 smtp_payload=$(jq -cn \
   --arg host "$smtp_host" \
   --arg port "$smtp_port" \
-  --arg user "$smtp_user" \
-  --arg password "$smtp_password" \
   --arg from "$smtp_from" \
   --arg from_name "$smtp_from_name" \
   --arg reply_to "$smtp_reply_to" \
   '{smtpServer: {
       host: $host,
       port: $port,
-      auth: "true",
+      auth: "false",
       starttls: "true",
       ssl: "false",
-      user: $user,
-      password: $password,
       from: $from,
       fromDisplayName: $from_name
     }}
@@ -138,9 +119,9 @@ smtp_payload=$(jq -cn \
       end')
 
 kc update "realms/$REALM" -b "$smtp_payload" >/dev/null
-unset smtp_payload smtp_password
+unset smtp_payload
 
-saved_smtp=$(kc get "realms/$REALM" --fields smtpServer)
+saved_smtp=$(kc get "realms/$REALM")
 printf '%s' "$saved_smtp" | jq -e \
   --arg host "$smtp_host" \
   --arg port "$smtp_port" \
@@ -148,9 +129,8 @@ printf '%s' "$saved_smtp" | jq -e \
   '.smtpServer.host == $host and
    .smtpServer.port == $port and
    .smtpServer.from == $from and
-   .smtpServer.auth == "true" and
-   .smtpServer.starttls == "true" and
-   (.smtpServer.password | length > 0)' >/dev/null
+   .smtpServer.auth == "false" and
+   .smtpServer.starttls == "true"' >/dev/null
 
-printf 'Configured Keycloak SMTP delivery through %s without printing credentials.\n' \
+printf 'Configured Keycloak SMTP delivery through the IP-restricted relay at %s.\n' \
   "$smtp_host"

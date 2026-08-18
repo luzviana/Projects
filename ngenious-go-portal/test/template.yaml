@@ -56,18 +56,6 @@ Resources:
         - Key: Environment
           Value: test
 
-  SmtpSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: ngenious-go-portal/test/smtp
-      Description: Provider-neutral SMTP configuration for Keycloak email delivery
-      SecretString: '{"configured":false}'
-      Tags:
-        - Key: Project
-          Value: ngenious-go-portal
-        - Key: Environment
-          Value: test
-
   InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -91,7 +79,6 @@ Resources:
                 Resource:
                   - !Ref DatabaseSecret
                   - !Ref BootstrapAdminSecret
-                  - !Ref SmtpSecret
       Tags:
         - Key: Project
           Value: ngenious-go-portal
@@ -319,9 +306,6 @@ Outputs:
     Value: !Ref DatabaseSecret
   BootstrapAdminSecretName:
     Value: !Ref BootstrapAdminSecret
-  SmtpSecretName:
-    Description: Populate this secret before configuring Keycloak email delivery
-    Value: !Ref SmtpSecret
   PortForwardCommand:
     Description: Requires the AWS Session Manager plugin on the operator computer
     Value: !Sub >-

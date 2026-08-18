@@ -11,8 +11,8 @@
 - Keycloak 26.7.0 and PostgreSQL 17.6 on the same instance
 - AWS Systems Manager access; no inbound security-group rules
 - External DNS for `got.ngenious.app` and `id.ngenious.app`; Keycloak email
-  delivery through authenticated Resend SMTP, with no load balancer, NAT
-  gateway, AWS monitoring, or automatic recovery
+  delivery through the existing Google Workspace SMTP relay, with no load
+  balancer, NAT gateway, AWS monitoring, or automatic recovery
 
 The VPC is shared with Media Monitoring and has peering routes to private
 networks. The instance has a dedicated security group with no inbound rules.
@@ -100,35 +100,35 @@ the Keycloak image is upgraded.
 ## Keycloak email delivery
 
 Keycloak owns invitation, verification, and password-reset behavior and sends
-the branded messages directly through standard SMTP. Resend is the delivery
-provider; Amazon SES is not part of this configuration.
+the branded messages directly through standard SMTP. The shared-test PoC uses
+the existing `viana.ooo` Google Workspace SMTP relay; Amazon SES and Resend are
+not part of this configuration.
 
-Verify the dedicated sending domain in Resend and create a sending-only API
-key. Store the configuration in the `ngenious-go-portal/test/smtp` Secrets
-Manager secret created by this stack. Do not place the API key in Git, shell
-history, deployment parameters, tickets, or logs. The secret must use this
-shape:
+In Google Workspace Admin, create an SMTP relay rule that accepts mail only
+from the identity server's fixed public IPv4 address, `18.215.111.250`, requires
+TLS, restricts senders to registered Workspace users, and permits delivery to
+external recipients. Store the provider-neutral Keycloak configuration in the
+version-controlled deployment script; it contains no SMTP credential. The
+effective configuration is:
 
 ```json
 {
-  "configured": true,
-  "host": "smtp.resend.com",
+  "host": "smtp-relay.gmail.com",
   "port": 587,
-  "username": "resend",
-  "password": "the Resend API key",
-  "from": "no-reply@notify.ngenious.app",
+  "auth": false,
+  "from": "aws@viana.ooo",
   "fromDisplayName": "ngenious",
-  "replyTo": "support@ngenious.ai"
+  "replyTo": "aws@viana.ooo"
 }
 ```
 
 Run `scripts/configure-keycloak-smtp.sh` on the identity instance through
-Systems Manager. The script reads both SMTP and Keycloak administrator
-credentials from Secrets Manager, configures STARTTLS on port 587, validates
-the saved realm settings, and never prints either credential. If the historical
+Systems Manager. The script reads only the Keycloak administrator credential
+from Secrets Manager, configures STARTTLS on port 587 without SMTP
+authentication, and validates the saved realm settings. If the historical
 bootstrap administrator is disabled, it creates and removes a short-lived local
 recovery administrator. Keep the existing SMTP configuration active until the
-Resend domain and secret are ready so password recovery is not interrupted.
+Google Workspace relay rule is ready so password recovery is not interrupted.
 
 ## Organization user invitation
 
@@ -145,11 +145,18 @@ Run `scripts/invite-organization-user.sh` on the identity instance with
 The script does not grant application access or application roles. Its default
 link lifetime is 12 hours and can be changed with
 `ACTION_LIFESPAN_SECONDS`. `DELETE_AFTER_SEND=true` is reserved for synthetic
-delivery tests. Once the Resend sending domain is verified, recipients do not
-need provider-specific verification.
+delivery tests. The Workspace relay can deliver to external recipients without
+provider-specific recipient verification.
 For an explicitly approved onboarding retest, `REPLACE_EXISTING=true` removes
 only the matching identity before recreating it and sending a fresh invitation.
 The default remains refusal to alter an existing identity.
+
+After the invited user completes onboarding, run
+`scripts/grant-organization-admin.sh` with `USER_EMAIL` and
+`ORGANIZATION_ALIAS` to grant the existing organization-scoped delegated
+administrator permissions. The script adds only the query navigation roles,
+the named organization's `view` and `manage` scopes, and the administrator's
+own user-record scopes. It does not grant realm-wide administration.
 
 Run `scripts/configure-account-overview.sh` after the synthetic organizations
 and protected test application exist. It assigns the ordinary synthetic tester
