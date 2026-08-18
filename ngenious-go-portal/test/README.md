@@ -71,7 +71,11 @@ directory at `/opt/go-portal/theme/ngenious-go` on the host, then run
 renews HTTPS automatically. The ngenious internal administration console is
 available at `https://controlt.ngenious.app/admin/master/console/`. Access still
 requires a Keycloak realm-administrator account; publishing the login page does
-not grant administrative privileges to ordinary or customer users.
+not grant administrative privileges to ordinary or customer users. The master
+realm's browser-authentication endpoints remain reachable through
+`id.ngenious.app` because the administration console uses them for login and
+third-party-cookie compatibility checks; the console path itself remains blocked
+on the regular user hostname.
 Opening the root of `id.ngenious.app` redirects to the test realm's Keycloak
 account console for self-service password and session management.
 

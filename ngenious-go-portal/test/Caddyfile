@@ -34,7 +34,7 @@ got.ngenious.app {
 id.ngenious.app {
 	encode zstd gzip
 
-	@administration path /admin* /realms/master*
+	@administration path /admin*
 	respond @administration 404
 
 	@root path /
