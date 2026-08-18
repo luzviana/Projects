@@ -12,3 +12,9 @@ containers on the same encrypted volume.
 
 The prototype does not create or change DNS, email-provider accounts, load
 balancers, NAT gateways, monitoring services, or production resources.
+
+The approved administration direction is documented in
+`ngenious-go-portal/test/CONTROLT-ARCHITECTURE.md`. Keycloak remains the
+identity engine. ControlT will provide a restricted, customer-oriented user
+administration workflow over Keycloak's supported APIs; it will not implement
+authentication, passwords, tokens, sessions, MFA, or email verification.

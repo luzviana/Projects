@@ -19,6 +19,21 @@ networks. The instance has a dedicated security group with no inbound rules.
 Host and container firewall rules reject traffic to RFC1918 private networks,
 apart from the VPC DNS resolver and the isolated container network.
 
+## Approved ControlT direction
+
+The approved target architecture and security boundaries are defined in
+[`CONTROLT-ARCHITECTURE.md`](CONTROLT-ARCHITECTURE.md). Keycloak remains the
+identity engine and source of truth. ControlT is a small, restricted
+administration layer that combines user creation, organization and application
+assignment, and Keycloak's setup-email action into one customer-safe workflow.
+It does not store passwords or implement authentication.
+
+The current native Keycloak administration console and Secrets Manager-backed
+operator scripts are transitional. They remain documented below so the running
+PoC can be understood and recovered while the approved ControlT replacement is
+built. Documentation of the target state does not imply those migration steps
+have already been deployed.
+
 ## Deploy
 
 Validate the template first:
@@ -60,15 +75,18 @@ values into terminals, tickets, or logs.
 `public-ingress.yaml` creates the stable IPv4 address and opens only ports 80 and
 443. `got.ngenious.app` is the protected relying-party test application;
 `id.ngenious.app` is the permanent Keycloak identity and self-service address.
-`controlt.ngenious.app` is the public login surface for the approved
-`go-portal-test` administration console. None of these hostnames exposes SSH,
-Keycloak port 8080, or the management port.
+`controlt.ngenious.app` currently exposes the native `go-portal-test` Keycloak
+administration console as a transitional implementation. Its approved target
+is the simplified ControlT application described in
+`CONTROLT-ARCHITECTURE.md`. None of these hostnames exposes SSH, Keycloak port
+8080, or the management port.
 
 After DNS points all three hostnames to the stack output, place `Caddyfile` at
 `/opt/go-portal/caddy/Caddyfile` and the version-controlled `theme/ngenious-go`
 directory at `/opt/go-portal/theme/ngenious-go` on the host, then run
 `scripts/configure-public-portal.sh` through Systems Manager. Caddy obtains and
-renews HTTPS automatically. The approved administration console is available at
+renews HTTPS automatically. During the transition, the native administration
+console is available at
 `https://controlt.ngenious.app/admin/go-portal-test/console/`. Access requires
 an administrator identity in `go-portal-test`; Keycloak permissions determine
 whether that identity is an ngenious realm administrator or a delegated
@@ -78,6 +96,11 @@ through `id.ngenious.app` for login and third-party-cookie compatibility checks;
 the console path itself remains blocked on the regular user hostname.
 Opening the root of `id.ngenious.app` redirects to the test realm's Keycloak
 account console for self-service password and session management.
+
+In the approved target, Caddy continues to terminate HTTPS and route the three
+public hostnames, but `controlt.ngenious.app` routes to the ControlT container.
+Customer administrators will not receive a link to the native Keycloak
+administration console.
 
 For an existing `got.ngenious.app` deployment, stage the reviewed `Caddyfile`
 as `/tmp/Caddyfile.identity` and run `scripts/activate-identity-host.sh` through
@@ -131,6 +154,10 @@ recovery administrator. Keep the existing SMTP configuration active until the
 Google Workspace relay rule is ready so password recovery is not interrupted.
 
 ## Organization user invitation
+
+This command-line workflow is transitional. ControlT will perform the same
+Keycloak operations server-side through a restricted service client and expose
+one customer-facing action: **Create user and send invitation**.
 
 Run `scripts/invite-organization-user.sh` on the identity instance with
 `USER_EMAIL`, `FIRST_NAME`, `LAST_NAME`, and `ORGANIZATION_ALIAS` set. The script:
@@ -223,9 +250,11 @@ surface unless a future Keycloak release adds member-only organization scopes.
 Keycloak's delegated administration API also returns basic realm metadata needed
 to load its own administration interface. The customer-facing portal must not
 link to or grant customer access to the native Keycloak administration console;
-the public admin route is reserved for ngenious internal administrators. Tests
-must confirm that clients, roles, authentication flows, and unauthorized user
-records remain denied to customer administrators.
+during the transition, that native route is reserved for ngenious internal
+administrators. The approved ControlT target does not expose the native console
+to customer administrators. Tests must confirm that clients, roles,
+authentication flows, and unauthorized user records remain denied to customer
+administrators.
 
 ## Protected OIDC test application
 
