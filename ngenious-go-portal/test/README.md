@@ -163,6 +163,13 @@ administrator permissions. The script adds only the query navigation roles,
 the named organization's `view` and `manage` scopes, and the administrator's
 own user-record scopes. It does not grant realm-wide administration.
 
+For an ngenious internal operator who must create and manage identities across
+customers, run `scripts/grant-ngenious-user-admin.sh` with `USER_EMAIL`. It
+grants the `manage-users`, `view-users`, `query-users`, and
+`query-organizations` roles. It does not grant realm, client, application-role,
+identity-provider, authentication-flow, or event administration. Customer
+administrators must not receive this role set.
+
 Run `scripts/configure-account-overview.sh` after the synthetic organizations
 and protected test application exist. It assigns the ordinary synthetic tester
 to `prototype-alpha` and configures `got.ngenious.app` with a display name,
