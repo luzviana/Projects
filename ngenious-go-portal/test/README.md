@@ -10,9 +10,9 @@
 - One 20 GiB encrypted `gp3` root volume
 - Keycloak 26.7.0 and PostgreSQL 17.6 on the same instance
 - AWS Systems Manager access; no inbound security-group rules
-- External DNS for `got.ngenious.app` and `id.ngenious.app`; SES sandbox email
-  delivery, with no load balancer, NAT gateway, AWS monitoring, or automatic
-  recovery
+- External DNS for `got.ngenious.app` and `id.ngenious.app`; Keycloak email
+  delivery through authenticated Resend SMTP, with no load balancer, NAT
+  gateway, AWS monitoring, or automatic recovery
 
 The VPC is shared with Media Monitoring and has peering routes to private
 networks. The instance has a dedicated security group with no inbound rules.
@@ -97,6 +97,39 @@ branding. The login theme's checked-in `css/styles.css` is the exact base
 stylesheet from the pinned Keycloak 26.7.0 release and must be refreshed when
 the Keycloak image is upgraded.
 
+## Keycloak email delivery
+
+Keycloak owns invitation, verification, and password-reset behavior and sends
+the branded messages directly through standard SMTP. Resend is the delivery
+provider; Amazon SES is not part of this configuration.
+
+Verify the dedicated sending domain in Resend and create a sending-only API
+key. Store the configuration in the `ngenious-go-portal/test/smtp` Secrets
+Manager secret created by this stack. Do not place the API key in Git, shell
+history, deployment parameters, tickets, or logs. The secret must use this
+shape:
+
+```json
+{
+  "configured": true,
+  "host": "smtp.resend.com",
+  "port": 587,
+  "username": "resend",
+  "password": "the Resend API key",
+  "from": "no-reply@notify.ngenious.app",
+  "fromDisplayName": "ngenious",
+  "replyTo": "support@ngenious.ai"
+}
+```
+
+Run `scripts/configure-keycloak-smtp.sh` on the identity instance through
+Systems Manager. The script reads both SMTP and Keycloak administrator
+credentials from Secrets Manager, configures STARTTLS on port 587, validates
+the saved realm settings, and never prints either credential. If the historical
+bootstrap administrator is disabled, it creates and removes a short-lived local
+recovery administrator. Keep the existing SMTP configuration active until the
+Resend domain and secret are ready so password recovery is not interrupted.
+
 ## Organization user invitation
 
 Run `scripts/invite-organization-user.sh` on the identity instance with
@@ -112,8 +145,8 @@ Run `scripts/invite-organization-user.sh` on the identity instance with
 The script does not grant application access or application roles. Its default
 link lifetime is 12 hours and can be changed with
 `ACTION_LIFESPAN_SECONDS`. `DELETE_AFTER_SEND=true` is reserved for synthetic
-mailbox-simulator tests. While SES remains sandboxed, do not use this workflow
-for customer addresses.
+delivery tests. Once the Resend sending domain is verified, recipients do not
+need provider-specific verification.
 For an explicitly approved onboarding retest, `REPLACE_EXISTING=true` removes
 only the matching identity before recreating it and sending a fresh invitation.
 The default remains refusal to alter an existing identity.
