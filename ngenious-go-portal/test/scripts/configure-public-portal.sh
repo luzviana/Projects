@@ -89,7 +89,7 @@ docker run -d \
   caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
 
 admin_status=$(curl --max-time 10 -sS -o /dev/null -w '%{http_code}' \
-  https://controlt.ngenious.app/admin/master/console/)
+  https://controlt.ngenious.app/admin/go-portal-test/console/)
 [[ "$admin_status" == 200 || "$admin_status" == 302 ]]
 
 echo 'Public identity and ngenious administration configuration completed'

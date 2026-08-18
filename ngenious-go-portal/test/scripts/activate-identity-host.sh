@@ -130,7 +130,7 @@ redirect_location=$(curl --max-time 10 -fsS -o /dev/null -w '%{redirect_url}' \
 [[ "$redirect_location" == https://id.ngenious.app/realms/go-portal-test/* ]]
 
 admin_status=$(curl --max-time 10 -sS -o /dev/null -w '%{http_code}' \
-  https://controlt.ngenious.app/admin/master/console/)
+  https://controlt.ngenious.app/admin/go-portal-test/console/)
 [[ "$admin_status" == 200 || "$admin_status" == 302 ]]
 
 trap - ERR

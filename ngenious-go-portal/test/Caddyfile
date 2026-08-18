@@ -62,8 +62,8 @@ id.ngenious.app {
 controlt.ngenious.app {
 	encode zstd gzip
 
-	@root path /
-	redir @root /admin/master/console/ 302
+	@approvedAdminEntry path / /admin/master*
+	redir @approvedAdminEntry /admin/go-portal-test/console/ 302
 
 	reverse_proxy 127.0.0.1:8080
 

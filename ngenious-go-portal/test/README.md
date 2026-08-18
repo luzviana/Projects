@@ -60,22 +60,22 @@ values into terminals, tickets, or logs.
 `public-ingress.yaml` creates the stable IPv4 address and opens only ports 80 and
 443. `got.ngenious.app` is the protected relying-party test application;
 `id.ngenious.app` is the permanent Keycloak identity and self-service address.
-`controlt.ngenious.app` is the public login surface for the ngenious internal
-administration console. None of these hostnames exposes SSH, Keycloak port 8080,
-or the management port.
+`controlt.ngenious.app` is the public login surface for the approved
+`go-portal-test` administration console. None of these hostnames exposes SSH,
+Keycloak port 8080, or the management port.
 
 After DNS points all three hostnames to the stack output, place `Caddyfile` at
 `/opt/go-portal/caddy/Caddyfile` and the version-controlled `theme/ngenious-go`
 directory at `/opt/go-portal/theme/ngenious-go` on the host, then run
 `scripts/configure-public-portal.sh` through Systems Manager. Caddy obtains and
-renews HTTPS automatically. The ngenious internal administration console is
-available at `https://controlt.ngenious.app/admin/master/console/`. Access still
-requires a Keycloak realm-administrator account; publishing the login page does
-not grant administrative privileges to ordinary or customer users. The master
-realm's browser-authentication endpoints remain reachable through
-`id.ngenious.app` because the administration console uses them for login and
-third-party-cookie compatibility checks; the console path itself remains blocked
-on the regular user hostname.
+renews HTTPS automatically. The approved administration console is available at
+`https://controlt.ngenious.app/admin/go-portal-test/console/`. Access requires
+an administrator identity in `go-portal-test`; Keycloak permissions determine
+whether that identity is an ngenious realm administrator or a delegated
+organization administrator. Publishing the login page grants no administrative
+privileges to ordinary users. Browser-authentication endpoints remain reachable
+through `id.ngenious.app` for login and third-party-cookie compatibility checks;
+the console path itself remains blocked on the regular user hostname.
 Opening the root of `id.ngenious.app` redirects to the test realm's Keycloak
 account console for self-service password and session management.
 
