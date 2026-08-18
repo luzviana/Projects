@@ -104,6 +104,11 @@ Resources:
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
+        - Description: SMTP submission to Amazon SES
+          IpProtocol: tcp
+          FromPort: 587
+          ToPort: 587
+          CidrIp: 0.0.0.0/0
         - Description: DNS over UDP to the VPC resolver
           IpProtocol: udp
           FromPort: 53
@@ -241,7 +246,10 @@ Resources:
           iptables -C OUTPUT -p udp -d 172.31.0.2 --dport 53 -j ACCEPT 2>/dev/null || iptables -I OUTPUT 1 -p udp -d 172.31.0.2 --dport 53 -j ACCEPT
           iptables -C OUTPUT -p tcp -d 172.31.0.2 --dport 53 -j ACCEPT 2>/dev/null || iptables -I OUTPUT 1 -p tcp -d 172.31.0.2 --dport 53 -j ACCEPT
           iptables -C OUTPUT -d 172.30.0.0/24 -j ACCEPT 2>/dev/null || iptables -I OUTPUT 1 -d 172.30.0.0/24 -j ACCEPT
+          iptables -C DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || iptables -I DOCKER-USER 1 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
           iptables -C DOCKER-USER -s 172.30.0.0/24 -d 172.30.0.0/24 -j ACCEPT 2>/dev/null || iptables -I DOCKER-USER 1 -s 172.30.0.0/24 -d 172.30.0.0/24 -j ACCEPT
+          iptables -C DOCKER-USER -s 172.30.0.0/24 -d 172.31.0.2/32 -p udp --dport 53 -j ACCEPT 2>/dev/null || iptables -I DOCKER-USER 2 -s 172.30.0.0/24 -d 172.31.0.2/32 -p udp --dport 53 -j ACCEPT
+          iptables -C DOCKER-USER -s 172.30.0.0/24 -d 172.31.0.2/32 -p tcp --dport 53 -j ACCEPT 2>/dev/null || iptables -I DOCKER-USER 3 -s 172.30.0.0/24 -d 172.31.0.2/32 -p tcp --dport 53 -j ACCEPT
           for cidr in 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16; do
             iptables -C OUTPUT -d "$cidr" -j REJECT 2>/dev/null || iptables -A OUTPUT -d "$cidr" -j REJECT
             iptables -C DOCKER-USER -d "$cidr" -j REJECT 2>/dev/null || iptables -I DOCKER-USER 2 -d "$cidr" -j REJECT

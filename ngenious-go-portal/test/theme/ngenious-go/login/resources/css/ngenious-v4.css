@@ -122,6 +122,21 @@ input[type="submit"].pf-v5-c-button.pf-m-primary {
   --pf-v5-c-button--m-primary--active--BackgroundColor: #15aeb7;
 }
 
+#ngenious-continue-setup {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1.5rem;
+  text-decoration: none;
+}
+
+.ngenious-setup-instruction {
+  color: var(--ng-muted);
+  font-size: 1rem;
+  line-height: 1.55;
+  text-align: center;
+}
+
 a {
   color: var(--ng-cyan-dark);
   font-weight: 600;

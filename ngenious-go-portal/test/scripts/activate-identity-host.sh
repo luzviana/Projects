@@ -29,6 +29,11 @@ cp -p "$APP_ENV" "$APP_ENV.pre-identity"
 cp -p "$CADDYFILE" "$CADDYFILE.pre-identity"
 
 sed -i 's|^KC_HOSTNAME=.*|KC_HOSTNAME=https://id.ngenious.app|' "$KEYCLOAK_ENV"
+if grep -q '^KC_HOSTNAME_ADMIN=' "$KEYCLOAK_ENV"; then
+  sed -i 's|^KC_HOSTNAME_ADMIN=.*|KC_HOSTNAME_ADMIN=https://controlt.ngenious.app|' "$KEYCLOAK_ENV"
+else
+  printf '%s\n' 'KC_HOSTNAME_ADMIN=https://controlt.ngenious.app' >> "$KEYCLOAK_ENV"
+fi
 sed -i 's|^OIDC_ISSUER=.*|OIDC_ISSUER=https://id.ngenious.app/realms/go-portal-test|' "$APP_ENV"
 cp "$STAGED_CADDYFILE" "$CADDYFILE"
 chmod 0640 "$CADDYFILE"
@@ -123,6 +128,10 @@ test "$public_ready" = true
 redirect_location=$(curl --max-time 10 -fsS -o /dev/null -w '%{redirect_url}' \
   https://got.ngenious.app/)
 [[ "$redirect_location" == https://id.ngenious.app/realms/go-portal-test/* ]]
+
+admin_status=$(curl --max-time 10 -sS -o /dev/null -w '%{http_code}' \
+  https://controlt.ngenious.app/admin/master/console/)
+[[ "$admin_status" == 200 || "$admin_status" == 302 ]]
 
 trap - ERR
 printf 'Identity host activated; rollback containers remain stopped.\n'

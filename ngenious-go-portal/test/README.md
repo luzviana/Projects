@@ -10,8 +10,9 @@
 - One 20 GiB encrypted `gp3` root volume
 - Keycloak 26.7.0 and PostgreSQL 17.6 on the same instance
 - AWS Systems Manager access; no inbound security-group rules
-- External DNS for `got.ngenious.app` and `id.ngenious.app`; no SES, load
-  balancer, NAT gateway, AWS monitoring, or automatic recovery
+- External DNS for `got.ngenious.app` and `id.ngenious.app`; SES sandbox email
+  delivery, with no load balancer, NAT gateway, AWS monitoring, or automatic
+  recovery
 
 The VPC is shared with Media Monitoring and has peering routes to private
 networks. The instance has a dedicated security group with no inbound rules.
@@ -59,15 +60,18 @@ values into terminals, tickets, or logs.
 `public-ingress.yaml` creates the stable IPv4 address and opens only ports 80 and
 443. `got.ngenious.app` is the protected relying-party test application;
 `id.ngenious.app` is the permanent Keycloak identity and self-service address.
-Neither hostname exposes SSH, Keycloak port 8080, the management port, or the
-administration console.
+`controlt.ngenious.app` is the public login surface for the ngenious internal
+administration console. None of these hostnames exposes SSH, Keycloak port 8080,
+or the management port.
 
-After DNS points both hostnames to the stack output, place `Caddyfile` at
+After DNS points all three hostnames to the stack output, place `Caddyfile` at
 `/opt/go-portal/caddy/Caddyfile` and the version-controlled `theme/ngenious-go`
 directory at `/opt/go-portal/theme/ngenious-go` on the host, then run
 `scripts/configure-public-portal.sh` through Systems Manager. Caddy obtains and
-renews HTTPS automatically. Public requests to `/admin` and the master realm are
-answered with 404; administration continues through the Systems Manager tunnel.
+renews HTTPS automatically. The ngenious internal administration console is
+available at `https://controlt.ngenious.app/admin/master/console/`. Access still
+requires a Keycloak realm-administrator account; publishing the login page does
+not grant administrative privileges to ordinary or customer users.
 Opening the root of `id.ngenious.app` redirects to the test realm's Keycloak
 account console for self-service password and session management.
 
@@ -78,14 +82,37 @@ test application's issuer, validates both services and the public redirect, and
 leaves the stopped pre-migration containers available for rollback review.
 
 Run `scripts/configure-login-theme.sh` after the themed Keycloak container is
-ready. The script activates the `ngenious-go` login and account themes for the
-test realm, applies the `ngenious Account` display name, and verifies the saved
-realm settings. The login theme extends Keycloak's built-in v2 theme and the
-account theme extends the built-in v3 Account Console. Both preserve Keycloak's
-standard authentication and self-service behavior while applying the approved
-ngenious branding. The login theme's checked-in `css/styles.css` is the exact
-base stylesheet from the pinned Keycloak 26.7.0 release and must be refreshed
-when the Keycloak image is upgraded.
+ready. The script activates the `ngenious-go` login, account, and email themes
+for the test realm, applies the `ngenious Account` display name, and verifies
+the saved realm settings. The email theme provides branded password-setup and
+password-reset messages with expiring links; it does not send passwords in
+email. The login theme extends Keycloak's built-in v2 theme and the account
+theme extends the built-in v3 Account Console. All preserve Keycloak's standard
+authentication and self-service behavior while applying the approved ngenious
+branding. The login theme's checked-in `css/styles.css` is the exact base
+stylesheet from the pinned Keycloak 26.7.0 release and must be refreshed when
+the Keycloak image is upgraded.
+
+## Organization user invitation
+
+Run `scripts/invite-organization-user.sh` on the identity instance with
+`USER_EMAIL`, `FIRST_NAME`, `LAST_NAME`, and `ORGANIZATION_ALIAS` set. The script:
+
+1. refuses to change or relink an identity that already exists;
+2. creates an unverified identity without a password;
+3. adds it to exactly the named organization;
+4. sends one branded, expiring action link for email verification and password
+   creation; and
+5. removes the newly created identity if delivery fails.
+
+The script does not grant application access or application roles. Its default
+link lifetime is 12 hours and can be changed with
+`ACTION_LIFESPAN_SECONDS`. `DELETE_AFTER_SEND=true` is reserved for synthetic
+mailbox-simulator tests. While SES remains sandboxed, do not use this workflow
+for customer addresses.
+For an explicitly approved onboarding retest, `REPLACE_EXISTING=true` removes
+only the matching identity before recreating it and sending a fresh invitation.
+The default remains refusal to alter an existing identity.
 
 Run `scripts/configure-account-overview.sh` after the synthetic organizations
 and protected test application exist. It assigns the ordinary synthetic tester
@@ -139,9 +166,10 @@ customer administrators must use an ngenious-controlled restricted management
 surface unless a future Keycloak release adds member-only organization scopes.
 Keycloak's delegated administration API also returns basic realm metadata needed
 to load its own administration interface. The customer-facing portal must not
-expose the native Keycloak administration console; tests must instead confirm
-that clients, roles, authentication flows, and unauthorized user records remain
-denied.
+link to or grant customer access to the native Keycloak administration console;
+the public admin route is reserved for ngenious internal administrators. Tests
+must confirm that clients, roles, authentication flows, and unauthorized user
+records remain denied to customer administrators.
 
 ## Protected OIDC test application
 

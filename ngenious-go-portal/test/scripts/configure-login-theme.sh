@@ -94,14 +94,17 @@ unset ADMIN_JSON ADMIN_USER ADMIN_PASSWORD
 kc update "realms/$REALM" \
     -s "loginTheme=$THEME" \
     -s "accountTheme=$THEME" \
+    -s "emailTheme=$THEME" \
     -s 'displayName=ngenious Account'
 
 ACTIVE_THEMES=$(kc get "realms/$REALM" \
-    --fields loginTheme,accountTheme,displayName)
+    --fields loginTheme,accountTheme,emailTheme,displayName)
 
 test "$(printf '%s' "$ACTIVE_THEMES" | jq -r .loginTheme)" = "$THEME"
 test "$(printf '%s' "$ACTIVE_THEMES" | jq -r .accountTheme)" = "$THEME"
+test "$(printf '%s' "$ACTIVE_THEMES" | jq -r .emailTheme)" = "$THEME"
 test "$(printf '%s' "$ACTIVE_THEMES" | jq -r .displayName)" = 'ngenious Account'
-printf 'Active UI themes: login=%s account=%s\n' \
+printf 'Active themes: login=%s account=%s email=%s\n' \
   "$(printf '%s' "$ACTIVE_THEMES" | jq -r .loginTheme)" \
-  "$(printf '%s' "$ACTIVE_THEMES" | jq -r .accountTheme)"
+  "$(printf '%s' "$ACTIVE_THEMES" | jq -r .accountTheme)" \
+  "$(printf '%s' "$ACTIVE_THEMES" | jq -r .emailTheme)"

@@ -58,3 +58,28 @@ id.ngenious.app {
 		format json
 	}
 }
+
+controlt.ngenious.app {
+	encode zstd gzip
+
+	@root path /
+	redir @root /admin/master/console/ 302
+
+	reverse_proxy 127.0.0.1:8080
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy "same-origin"
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/administration-access.log {
+			roll_size 25MiB
+			roll_keep 10
+			roll_keep_for 720h
+		}
+		format json
+	}
+}

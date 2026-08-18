@@ -47,7 +47,7 @@ Resources:
 
 Outputs:
   PublicIp:
-    Description: Stable IPv4 address for got.ngenious.app and id.ngenious.app
+    Description: Stable IPv4 address for got.ngenious.app, id.ngenious.app, and controlt.ngenious.app
     Value: !GetAtt PortalAddress.PublicIp
   AllocationId:
     Value: !GetAtt PortalAddress.AllocationId

@@ -55,11 +55,22 @@ resource_policy=$(jq -cn \
     {Sid:"IdentityHostWritesClientSecret",Effect:"Allow",Principal:{AWS:$identity},Action:["secretsmanager:GetSecretValue","secretsmanager:PutSecretValue"],Resource:$resource},
     {Sid:"DashboardReadsClientSecret",Effect:"Allow",Principal:{AWS:$dashboard},Action:"secretsmanager:GetSecretValue",Resource:$resource}
   ]}')
-aws secretsmanager put-resource-policy \
-  --region "$AWS_REGION" \
-  --secret-id "$secret_arn" \
-  --resource-policy "$resource_policy" \
-  --block-public-policy >/dev/null
+resource_policy_ready=false
+for attempt in $(seq 1 12); do
+  if aws secretsmanager put-resource-policy \
+    --region "$AWS_REGION" \
+    --secret-id "$secret_arn" \
+    --resource-policy "$resource_policy" \
+    --block-public-policy >/dev/null 2>&1; then
+    resource_policy_ready=true
+    break
+  fi
+  sleep 5
+done
+if [[ "$resource_policy_ready" != true ]]; then
+  printf 'IAM did not make the new dashboard role available to the secret policy in time.\n' >&2
+  exit 1
+fi
 
 if ! aws iam get-instance-profile --instance-profile-name "$DASHBOARD_PROFILE" >/dev/null 2>&1; then
   aws iam create-instance-profile --instance-profile-name "$DASHBOARD_PROFILE" >/dev/null
