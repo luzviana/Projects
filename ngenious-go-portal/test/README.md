@@ -150,6 +150,11 @@ provider-specific recipient verification.
 For an explicitly approved onboarding retest, `REPLACE_EXISTING=true` removes
 only the matching identity before recreating it and sending a fresh invitation.
 The default remains refusal to alter an existing identity.
+Use `RESEND_EXISTING=true` to send a fresh setup link without recreating the
+identity. The script first verifies that the existing identity is already a
+member of the named organization, and it preserves all current permissions.
+`RESEND_EXISTING` cannot be combined with `REPLACE_EXISTING` or
+`DELETE_AFTER_SEND`.
 
 After the invited user completes onboarding, run
 `scripts/grant-organization-admin.sh` with `USER_EMAIL` and
