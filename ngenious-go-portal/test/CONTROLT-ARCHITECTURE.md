@@ -236,6 +236,20 @@ The target is accepted only when tests demonstrate that:
 11. all normal administration operations complete without a Keycloak restart
     or public 502 response.
 
+## Automated verification
+
+The pre-deployment suite runs entirely against isolated substitutes and cannot
+create a live identity or send an email. It verifies the user lifecycle and
+rollback rules, administrator and organization boundaries, approved-application
+enforcement, signed sessions, CSRF protection, request limits, safe error
+responses, security headers, logout invalidation, and cryptographic OIDC token
+validation.
+
+Passing the automated suite authorizes deployment testing; it does not by
+itself satisfy the live-email and direct-application sign-in acceptance
+criteria above. Those checks are performed after deployment with a designated
+pilot account.
+
 ## Transition
 
 Until ControlT is deployed, `controlt.ngenious.app` still points to the native

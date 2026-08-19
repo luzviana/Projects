@@ -70,4 +70,16 @@ npm run check
 ```
 
 The checked-in tests use an in-memory Keycloak substitute and never create
-users or send email.
+users or send email. The suite currently covers 37 workflow, authorization,
+request-security, session, and identity-token checks, including:
+
+- organization isolation and administrator-role enforcement;
+- create, duplicate, resend, rollback, enable/disable, and application-access
+  behavior;
+- authentication, CSRF, request parsing and size limits, logout, safe errors,
+  and browser security headers; and
+- signed OIDC token verification for signature, issuer, audience, expiry,
+  nonce, subject, algorithm, and malformed-token cases.
+
+These automated checks are the pre-deployment gate. The deployed end-to-end
+test with Keycloak and actual email delivery is a separate acceptance step.

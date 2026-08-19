@@ -103,8 +103,15 @@ export class OidcClient {
     if (typeof token !== "string") throw new HttpError(401, "login_failed", "Keycloak did not return an identity token.");
     const segments = token.split(".");
     if (segments.length !== 3) throw new HttpError(401, "login_failed", "The identity token is malformed.");
-    const header = JSON.parse(Buffer.from(segments[0], "base64url"));
-    const claims = JSON.parse(Buffer.from(segments[1], "base64url"));
+    let header;
+    let claims;
+    try {
+      header = JSON.parse(Buffer.from(segments[0], "base64url"));
+      claims = JSON.parse(Buffer.from(segments[1], "base64url"));
+    } catch {
+      throw new HttpError(401, "login_failed", "The identity token is malformed.");
+    }
+    if (!header || typeof header !== "object" || !claims || typeof claims !== "object") throw new HttpError(401, "login_failed", "The identity token is malformed.");
     if (header.alg !== "RS256" || !header.kid) throw new HttpError(401, "login_failed", "The identity token algorithm is not accepted.");
     let key = (await this.keys()).find((candidate) => candidate.kid === header.kid);
     if (!key) key = (await this.keys(true)).find((candidate) => candidate.kid === header.kid);
@@ -112,7 +119,7 @@ export class OidcClient {
     const verified = verifySignature("RSA-SHA256", Buffer.from(`${segments[0]}.${segments[1]}`), createPublicKey({ key, format: "jwk" }), Buffer.from(segments[2], "base64url"));
     const now = Math.floor(Date.now() / 1000);
     const audience = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-    if (!verified || claims.iss !== this.config.issuer || !audience.includes(this.config.oidcClientId) || !Number.isInteger(claims.exp) || !Number.isInteger(claims.iat) || claims.exp <= now || claims.iat > now + 60 || claims.nonce !== nonce) {
+    if (!verified || typeof claims.sub !== "string" || !claims.sub || claims.iss !== this.config.issuer || !audience.includes(this.config.oidcClientId) || !Number.isInteger(claims.exp) || !Number.isInteger(claims.iat) || claims.exp <= now || claims.iat > now + 60 || claims.nonce !== nonce) {
       throw new HttpError(401, "login_failed", "The identity token could not be verified.");
     }
     return claims;

@@ -8,6 +8,6 @@
   },
   "scripts": {
     "start": "node server.mjs",
-    "check": "node --check server.mjs && node --check public/app.js && node test/backend.test.mjs"
+    "check": "node --check server.mjs && node --check lib/http-app.mjs && node --check public/app.js && node test/backend.test.mjs && node test/http.test.mjs && node test/security.test.mjs"
   }
 }

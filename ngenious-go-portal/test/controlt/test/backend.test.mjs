@@ -119,3 +119,120 @@ test("failed email delivery rolls back a newly created identity", async () => {
   }), /relay unavailable/);
   assert.deepEqual(keycloak.calls.at(-1), ["deleteUser", "user-new"]);
 });
+
+test("accounts without a ControlT administrator role are denied", async () => {
+  const service = new ControlTService(config, fakeKeycloak());
+  await assert.rejects(() => service.listOrganizations({ sub: "ordinary", roles: [] }),
+    (error) => error.status === 403 && error.code === "administrator_required");
+});
+
+test("customer administrators with ambiguous organization membership are denied", async () => {
+  const service = new ControlTService(config, fakeKeycloak({ userOrganizations: async () => [{ id: "org-a" }, { id: "org-b" }] }));
+  await assert.rejects(() => service.listOrganizations(customer),
+    (error) => error.status === 403 && error.code === "organization_binding_error");
+});
+
+test("an existing pending member is directed to resend without recreation", async () => {
+  const keycloak = fakeKeycloak({ findUserByEmail: async () => ({ id: "existing", emailVerified: false }) });
+  const service = new ControlTService(config, keycloak);
+  await assert.rejects(() => service.createAndInvite(internal, "org-a", {
+    email: "person@example.com", firstName: "Person", lastName: "Example", applications: [],
+  }), (error) => error.status === 409 && error.code === "pending_identity_exists" && error.details.userId === "existing");
+  assert.equal(keycloak.calls.length, 0);
+});
+
+test("an existing active member does not receive an unexpected setup email", async () => {
+  const keycloak = fakeKeycloak({ findUserByEmail: async () => ({ id: "existing", emailVerified: true }) });
+  const service = new ControlTService(config, keycloak);
+  await assert.rejects(() => service.createAndInvite(internal, "org-a", {
+    email: "person@example.com", firstName: "Person", lastName: "Example", applications: [],
+  }), (error) => error.status === 409 && error.code === "active_identity_exists");
+  assert.equal(keycloak.calls.length, 0);
+});
+
+test("resending preserves the user identifier and application assignments", async () => {
+  const keycloak = fakeKeycloak();
+  const service = new ControlTService(config, keycloak);
+  const result = await service.resendInvitation(internal, "org-a", "user-1");
+  assert.equal(result.id, "user-1");
+  assert.deepEqual(keycloak.calls.map(([name]) => name), ["sendSetupEmail", "updateUser"]);
+  assert.equal(keycloak.calls.some(([name]) => name === "createUser" || name === "addClientRole" || name === "removeClientRole"), false);
+});
+
+test("resend is blocked for active and disabled members", async () => {
+  for (const [user, code] of [
+    [{ id: "active", enabled: true, emailVerified: true }, "member_already_active"],
+    [{ id: "disabled", enabled: false, emailVerified: false }, "member_disabled"],
+  ]) {
+    const keycloak = fakeKeycloak({ getUser: async () => user });
+    const service = new ControlTService(config, keycloak);
+    await assert.rejects(() => service.resendInvitation(internal, "org-a", user.id),
+      (error) => error.status === 409 && error.code === code);
+    assert.equal(keycloak.calls.length, 0);
+  }
+});
+
+test("a non-member cannot be updated or invited again through an organization URL", async () => {
+  const keycloak = fakeKeycloak({ userOrganizations: async (userId) => userId === internal.sub ? [{ id: "org-a" }] : [{ id: "org-b" }] });
+  const service = new ControlTService(config, keycloak);
+  await assert.rejects(() => service.updateMember(internal, "org-a", "other-user", { enabled: false }),
+    (error) => error.status === 404 && error.code === "member_not_found");
+});
+
+test("application updates add and remove only organization-approved roles", async () => {
+  const applications = {
+    "app-a": { id: "client-a", clientId: "app-a", name: "A", role: { id: "role-a", name: "access" } },
+    "app-b": { id: "client-b", clientId: "app-b", name: "B", role: { id: "role-b", name: "access" } },
+  };
+  const keycloak = fakeKeycloak({
+    getOrganization: async () => ({ id: "org-a", name: "Alpha", attributes: { "ngenious.allowedApplications": ["app-a", "app-b"] } }),
+    application: async (id) => applications[id],
+    userClientRoles: async (_user, client) => client === "client-a" ? [{ id: "role-a", name: "access" }] : [],
+  });
+  const service = new ControlTService(config, keycloak);
+  const result = await service.updateMember(internal, "org-a", "user-1", { applications: ["app-b"] });
+  assert.deepEqual(result.applications, ["app-b"]);
+  assert.deepEqual(keycloak.calls.map(([name]) => name), ["removeClientRole", "addClientRole"]);
+});
+
+test("enable and disable updates change only the enabled field", async () => {
+  const keycloak = fakeKeycloak();
+  const service = new ControlTService(config, keycloak);
+  const result = await service.updateMember(internal, "org-a", "user-1", { enabled: false });
+  assert.equal(result.status, "Disabled");
+  const update = keycloak.calls.find(([name]) => name === "updateUser");
+  assert.deepEqual(update, ["updateUser", "user-1", { enabled: false }]);
+});
+
+test("member status is derived from enabled and verified state", async () => {
+  const users = {
+    pending: { id: "pending", email: "p@example.com", enabled: true, emailVerified: false },
+    active: { id: "active", email: "a@example.com", enabled: true, emailVerified: true },
+    disabled: { id: "disabled", email: "d@example.com", enabled: false, emailVerified: true },
+  };
+  const keycloak = fakeKeycloak({
+    organizationMembers: async () => Object.keys(users).map((id) => ({ id })),
+    getUser: async (id) => users[id],
+  });
+  const service = new ControlTService(config, keycloak);
+  const members = await service.listMembers(internal, "org-a");
+  assert.deepEqual(members.map(({ status }) => status), ["Pending", "Active", "Disabled"]);
+});
+
+test("invalid email and names are rejected before Keycloak mutation", async () => {
+  const keycloak = fakeKeycloak();
+  const service = new ControlTService(config, keycloak);
+  await assert.rejects(() => service.createAndInvite(internal, "org-a", {
+    email: "not-an-email", firstName: "Person", lastName: "Example", applications: [],
+  }), (error) => error.status === 400 && error.code === "invalid_email");
+  assert.equal(keycloak.calls.length, 0);
+});
+
+test("membership failure rolls back a newly created identity", async () => {
+  const keycloak = fakeKeycloak({ addOrganizationMember: async () => { throw new Error("membership failed"); } });
+  const service = new ControlTService(config, keycloak);
+  await assert.rejects(() => service.createAndInvite(internal, "org-a", {
+    email: "person@example.com", firstName: "Person", lastName: "Example", applications: [],
+  }), /membership failed/);
+  assert.deepEqual(keycloak.calls.at(-1), ["deleteUser", "user-new"]);
+});
