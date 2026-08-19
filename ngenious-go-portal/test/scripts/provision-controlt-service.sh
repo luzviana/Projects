@@ -5,6 +5,7 @@ REALM=go-portal-test
 ADMIN_SECRET=ngenious-go-portal/test/bootstrap-admin
 KEYCLOAK_CONTAINER=keycloak
 CLIENT_ID=controlt-service
+OIDC_CLIENT_ID=controlt-web
 SECRETS_DIR=/opt/go-portal/secrets
 CONTROLT_ENV=$SECRETS_DIR/controlt.env
 
@@ -63,7 +64,7 @@ cleanup() {
     fi
   fi
   unset ADMIN_JSON ADMIN_USER ADMIN_PASSWORD RECOVERY_ADMIN_USER \
-    RECOVERY_ADMIN_PASSWORD CLIENT_SECRET CONTROLT_SESSION_SECRET ACCESS_TOKEN \
+    RECOVERY_ADMIN_PASSWORD CLIENT_SECRET OIDC_CLIENT_SECRET CONTROLT_SESSION_SECRET ACCESS_TOKEN \
     recovery_admin_id env_temp
 }
 trap cleanup EXIT
@@ -177,6 +178,50 @@ fi
 CLIENT_SECRET=$(kc get "clients/$client_uuid/client-secret" -r "$REALM" \
   | jq -er .value)
 
+oidc_client_uuid=$(kc get clients -r "$REALM" -q clientId="$OIDC_CLIENT_ID" \
+  --fields id,clientId | jq -r '.[0].id // empty')
+oidc_client_config=$(jq -cn --arg clientId "$OIDC_CLIENT_ID" '{
+  clientId: $clientId,
+  name: "ControlT",
+  description: "Customer-safe ngenious administration interface",
+  enabled: true,
+  protocol: "openid-connect",
+  publicClient: false,
+  serviceAccountsEnabled: false,
+  standardFlowEnabled: true,
+  implicitFlowEnabled: false,
+  directAccessGrantsEnabled: false,
+  fullScopeAllowed: false,
+  clientAuthenticatorType: "client-secret",
+  rootUrl: "https://controlt.ngenious.app",
+  baseUrl: "/",
+  redirectUris: ["https://controlt.ngenious.app/auth/callback"],
+  webOrigins: ["https://controlt.ngenious.app"],
+  attributes: {
+    "pkce.code.challenge.method": "S256",
+    "post.logout.redirect.uris": "https://controlt.ngenious.app/"
+  }
+}')
+if [[ -z "$oidc_client_uuid" ]]; then
+  oidc_client_uuid=$(kc create clients -r "$REALM" -b "$oidc_client_config" -i)
+else
+  kc update "clients/$oidc_client_uuid" -r "$REALM" -b "$oidc_client_config" >/dev/null
+fi
+
+for role_name in ngenious-admin organization-admin; do
+  if ! kc get "clients/$oidc_client_uuid/roles/$role_name" -r "$REALM" \
+    >/dev/null 2>&1; then
+    kc create "clients/$oidc_client_uuid/roles" -r "$REALM" \
+      -s name="$role_name" >/dev/null
+  fi
+  role_json=$(kc get "clients/$oidc_client_uuid/roles/$role_name" \
+    -r "$REALM" -c)
+  kc create "clients/$oidc_client_uuid/scope-mappings/clients/$oidc_client_uuid" \
+    -r "$REALM" -b "[$role_json]" >/dev/null 2>&1 || true
+done
+OIDC_CLIENT_SECRET=$(kc get "clients/$oidc_client_uuid/client-secret" -r "$REALM" \
+  | jq -er .value)
+
 install -d -o root -g root -m 0700 "$SECRETS_DIR"
 if [[ -f "$CONTROLT_ENV" ]]; then
   CONTROLT_SESSION_SECRET=$(sed -n \
@@ -195,6 +240,8 @@ env_temp=$(mktemp "$SECRETS_DIR/controlt.env.XXXXXX")
   printf 'KEYCLOAK_REALM=%s\n' "$REALM"
   printf 'KEYCLOAK_ADMIN_CLIENT_ID=%s\n' "$CLIENT_ID"
   printf 'KEYCLOAK_ADMIN_CLIENT_SECRET=%s\n' "$CLIENT_SECRET"
+  printf 'CONTROLT_OIDC_CLIENT_ID=%s\n' "$OIDC_CLIENT_ID"
+  printf 'CONTROLT_OIDC_CLIENT_SECRET=%s\n' "$OIDC_CLIENT_SECRET"
   printf 'CONTROLT_SESSION_SECRET=%s\n' "$CONTROLT_SESSION_SECRET"
 } >"$env_temp"
 chown root:root "$env_temp"

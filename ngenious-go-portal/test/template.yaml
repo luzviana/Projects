@@ -254,9 +254,48 @@ Resources:
 
           CLIENT_SECRET=$(docker exec keycloak /opt/keycloak/bin/kcadm.sh \
             get "clients/$CLIENT_UUID/client-secret" -r go-portal-test | jq -er .value)
+
+          OIDC_CLIENT_ID=controlt-web
+          OIDC_CLIENT_CONFIG=$(jq -cn --arg clientId "$OIDC_CLIENT_ID" '{
+            clientId: $clientId,
+            name: "ControlT",
+            description: "Customer-safe ngenious administration interface",
+            enabled: true,
+            protocol: "openid-connect",
+            publicClient: false,
+            serviceAccountsEnabled: false,
+            standardFlowEnabled: true,
+            implicitFlowEnabled: false,
+            directAccessGrantsEnabled: false,
+            fullScopeAllowed: false,
+            clientAuthenticatorType: "client-secret",
+            rootUrl: "https://controlt.ngenious.app",
+            baseUrl: "/",
+            redirectUris: ["https://controlt.ngenious.app/auth/callback"],
+            webOrigins: ["https://controlt.ngenious.app"],
+            attributes: {
+              "pkce.code.challenge.method": "S256",
+              "post.logout.redirect.uris": "https://controlt.ngenious.app/"
+            }
+          }')
+          OIDC_CLIENT_UUID=$(docker exec -i keycloak /opt/keycloak/bin/kcadm.sh \
+            create clients -r go-portal-test -f - -i <<<"$OIDC_CLIENT_CONFIG")
+          for ROLE_NAME in ngenious-admin organization-admin; do
+            docker exec keycloak /opt/keycloak/bin/kcadm.sh create \
+              "clients/$OIDC_CLIENT_UUID/roles" -r go-portal-test \
+              -s name="$ROLE_NAME" >/dev/null
+            ROLE_JSON=$(docker exec keycloak /opt/keycloak/bin/kcadm.sh get \
+              "clients/$OIDC_CLIENT_UUID/roles/$ROLE_NAME" -r go-portal-test -c)
+            docker exec keycloak /opt/keycloak/bin/kcadm.sh create \
+              "clients/$OIDC_CLIENT_UUID/scope-mappings/clients/$OIDC_CLIENT_UUID" \
+              -r go-portal-test -b "[$ROLE_JSON]" >/dev/null
+          done
+          OIDC_CLIENT_SECRET=$(docker exec keycloak /opt/keycloak/bin/kcadm.sh \
+            get "clients/$OIDC_CLIENT_UUID/client-secret" -r go-portal-test | jq -er .value)
+
           CONTROLT_SESSION_SECRET=$(openssl rand -hex 32)
-          printf 'KEYCLOAK_INTERNAL_URL=http://keycloak:8080\nKEYCLOAK_ISSUER=https://id.ngenious.app/realms/go-portal-test\nKEYCLOAK_REALM=go-portal-test\nKEYCLOAK_ADMIN_CLIENT_ID=%s\nKEYCLOAK_ADMIN_CLIENT_SECRET=%s\nCONTROLT_SESSION_SECRET=%s\n' \
-            "$CLIENT_ID" "$CLIENT_SECRET" "$CONTROLT_SESSION_SECRET" \
+          printf 'KEYCLOAK_INTERNAL_URL=http://keycloak:8080\nKEYCLOAK_ISSUER=https://id.ngenious.app/realms/go-portal-test\nKEYCLOAK_REALM=go-portal-test\nKEYCLOAK_ADMIN_CLIENT_ID=%s\nKEYCLOAK_ADMIN_CLIENT_SECRET=%s\nCONTROLT_OIDC_CLIENT_ID=%s\nCONTROLT_OIDC_CLIENT_SECRET=%s\nCONTROLT_SESSION_SECRET=%s\n' \
+            "$CLIENT_ID" "$CLIENT_SECRET" "$OIDC_CLIENT_ID" "$OIDC_CLIENT_SECRET" "$CONTROLT_SESSION_SECRET" \
             > /opt/go-portal/secrets/controlt.env
           chown root:root /opt/go-portal/secrets/controlt.env
           chmod 0600 /opt/go-portal/secrets/controlt.env
@@ -282,7 +321,7 @@ Resources:
           docker exec keycloak /opt/keycloak/bin/kcadm.sh \
             delete "users/$BOOTSTRAP_USER_ID" -r master >/dev/null
           sed -i '/^KC_BOOTSTRAP_ADMIN_/d' /opt/go-portal/secrets/keycloak.env
-          unset ACCESS_TOKEN ADMIN_PASSWORD CLIENT_SECRET CONTROLT_SESSION_SECRET DB_PASSWORD
+          unset ACCESS_TOKEN ADMIN_PASSWORD CLIENT_SECRET OIDC_CLIENT_SECRET CONTROLT_SESSION_SECRET DB_PASSWORD
 
           cat > /usr/local/sbin/go-portal-firewall <<'FIREWALL'
           #!/bin/bash

@@ -33,6 +33,11 @@ runtime and user-onboarding path use only the restricted service credential in
 the host's root-only `controlt.env`; they do not read AWS Secrets Manager or
 create offline recovery administrators.
 
+The backend implementation is in [`controlt/`](controlt/). It provides the
+organization-scoped JSON API, Keycloak OIDC sign-in, protected server sessions,
+invitation orchestration, application-role assignment, and audit events. The
+customer-facing interface and hostname cutover are separate deployment steps.
+
 ## Deploy
 
 Validate the template first:

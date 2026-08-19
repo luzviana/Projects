@@ -117,6 +117,18 @@ Authorization is enforced by the ControlT backend using authenticated token
 claims and server-side organization lookup. An organization identifier supplied
 by the browser is never trusted by itself.
 
+The confidential `controlt-web` login client defines two application roles:
+`ngenious-admin` and `organization-admin`. These roles identify the type of
+ControlT administrator; they do not grant native Keycloak console access. For a
+customer administrator, the backend additionally requires exactly one current
+Keycloak organization membership on every organization-scoped request.
+
+Each organization's approved applications are stored in its
+`ngenious.allowedApplications` attribute as Keycloak client IDs. Every listed
+client must expose the dedicated `access` client role. ControlT resolves this
+allowlist and the roles server-side and rejects browser-supplied applications
+that are not listed.
+
 ## User invitation workflow
 
 ### New identity
