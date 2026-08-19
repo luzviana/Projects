@@ -28,11 +28,10 @@ administration layer that combines user creation, organization and application
 assignment, and Keycloak's setup-email action into one customer-safe workflow.
 It does not store passwords or implement authentication.
 
-The current native Keycloak administration console and Secrets Manager-backed
-operator scripts are transitional. They remain documented below so the running
-PoC can be understood and recovered while the approved ControlT replacement is
-built. Documentation of the target state does not imply those migration steps
-have already been deployed.
+The current native Keycloak administration console is transitional. ControlT's
+runtime and user-onboarding path use only the restricted service credential in
+the host's root-only `controlt.env`; they do not read AWS Secrets Manager or
+create offline recovery administrators.
 
 ## Deploy
 
@@ -57,9 +56,18 @@ aws cloudformation deploy \
   --no-fail-on-empty-changeset
 ```
 
-No secret values are accepted as parameters or stored in Git. CloudFormation
-creates random database and bootstrap-administrator passwords in AWS Secrets
-Manager.
+`template.yaml` is the local-secret replacement design for a new stack. Do not
+apply it as an in-place update to the currently running legacy stack: that stack
+still owns historical Secrets Manager resources, and removing resources through
+an update can schedule them for deletion. The running PoC is migrated at the
+host/application layer and should be replaced deliberately when the new-stack
+path is exercised.
+
+No secret values are accepted as parameters or stored in Git. A new stack
+generates its database password, one-time bootstrap credential, ControlT client
+secret, and session secret on the encrypted instance. It provisions the
+restricted ControlT client, deletes the bootstrap identity, and removes the
+bootstrap values from the Keycloak environment before bootstrap completes.
 
 ## Access
 
@@ -67,8 +75,9 @@ The Keycloak HTTP port is bound only to the instance loopback interface. Use an
 AWS Systems Manager port-forwarding session to map local port `18080` to remote
 port `8080`, then open `http://localhost:18080`.
 
-The instance ID and secret names are CloudFormation outputs. Do not print secret
-values into terminals, tickets, or logs.
+The instance ID is a CloudFormation output. Runtime credentials exist only in
+root-protected files on the encrypted instance. Do not print them into
+terminals, tickets, or logs.
 
 ## Public customer portal
 
@@ -145,13 +154,10 @@ effective configuration is:
 }
 ```
 
-Run `scripts/configure-keycloak-smtp.sh` on the identity instance through
-Systems Manager. The script reads only the Keycloak administrator credential
-from Secrets Manager, configures STARTTLS on port 587 without SMTP
-authentication, and validates the saved realm settings. If the historical
-bootstrap administrator is disabled, it creates and removes a short-lived local
-recovery administrator. Keep the existing SMTP configuration active until the
-Google Workspace relay rule is ready so password recovery is not interrupted.
+The running PoC already has this realm-level SMTP setting. It is not part of
+normal ControlT operation. Future realm-level changes require a separately
+approved maintenance session; the restricted ControlT service identity cannot
+change SMTP or realm configuration.
 
 ## Organization user invitation
 
@@ -159,20 +165,16 @@ This command-line workflow is transitional. ControlT will perform the same
 Keycloak operations server-side through a restricted service client and expose
 one customer-facing action: **Create user and send invitation**.
 
-Provision the backend identity once with
-`scripts/provision-controlt-service.sh`. The transitional provisioning script
-uses the existing bootstrap-administrator secret only to create or update the
-backend-only `controlt-service` client. It grants `manage-users`, `view-users`,
-`query-users`, `query-organizations`, `view-clients`, and `query-clients`; it
-adds only those roles to the client's token scope and explicitly rejects realm,
-realm-client, and client-management roles or scopes. The script then verifies
-client-credentials access to the required read APIs and writes the credential
-and a generated ControlT session secret to
-`/opt/go-portal/secrets/controlt.env` with `root:root:600` permissions. It never
-prints either secret. Step 3 removes the remaining Secrets Manager bootstrap
-dependency from normal maintenance.
+The backend-only `controlt-service` client has `manage-users`, `view-users`,
+`query-users`, `query-organizations`, `view-clients`, and `query-clients`. Only
+those roles are included in its token scope; realm, realm-client, and
+client-management roles are forbidden. Its credential and the ControlT session
+secret are stored in `/opt/go-portal/secrets/controlt.env` with
+`root:root:600` permissions and are never printed. New stacks provision this
+identity during their one-time local bootstrap. The existing PoC was migrated
+once with `scripts/provision-controlt-service.sh`.
 
-Run `scripts/invite-organization-user.sh` on the identity instance with
+Run `scripts/invite-organization-user.sh` as root on the identity instance with
 `USER_EMAIL`, `FIRST_NAME`, `LAST_NAME`, and `ORGANIZATION_ALIAS` set. The script:
 
 1. refuses to change or relink an identity that already exists;
@@ -181,6 +183,10 @@ Run `scripts/invite-organization-user.sh` on the identity instance with
 4. sends one branded, expiring action link for email verification and password
    creation; and
 5. removes the newly created identity if delivery fails.
+
+The script authenticates only as `controlt-service` through the protected local
+environment. It never reads AWS Secrets Manager, creates a bootstrap
+administrator, stops Keycloak, or restarts Keycloak.
 
 The script does not grant application access or application roles. Its default
 link lifetime is 12 hours and can be changed with

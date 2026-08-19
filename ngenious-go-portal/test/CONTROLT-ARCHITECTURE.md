@@ -189,10 +189,12 @@ Required controls:
 - credential rotation supported without recreating users; and
 - encrypted EC2 root volume retained as the storage boundary.
 
-Existing Secrets Manager-backed scripts are transitional and must be migrated
-before this target is declared complete. Removing Secrets Manager must not move
-secret values into CloudFormation parameters, GitHub Actions variables, source
-files, shell history, or public container metadata.
+The ControlT runtime and normal user-administration scripts must not read AWS
+Secrets Manager. New identity stacks generate their secrets locally on the
+encrypted instance, provision the restricted service client, and delete the
+one-time bootstrap identity before initialization completes. Removing Secrets
+Manager must not move secret values into CloudFormation parameters, GitHub
+Actions variables, source files, shell history, or public container metadata.
 
 ## Availability requirement
 
@@ -225,7 +227,8 @@ The target is accepted only when tests demonstrate that:
 ## Transition
 
 Until ControlT is deployed, `controlt.ngenious.app` still points to the native
-Keycloak administration console and existing operator scripts may still read
-AWS Secrets Manager. That state is transitional, not the approved customer
-experience. Deployment must switch the hostname only after the ControlT
-security and end-to-end tests pass.
+Keycloak administration console. The restricted service client and local
+credential path are ready, and the normal invitation workflow no longer uses
+AWS Secrets Manager or an offline bootstrap administrator. The native console
+remains transitional, not the approved customer experience. Deployment must
+switch the hostname only after the ControlT security and end-to-end tests pass.
