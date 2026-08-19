@@ -159,6 +159,19 @@ This command-line workflow is transitional. ControlT will perform the same
 Keycloak operations server-side through a restricted service client and expose
 one customer-facing action: **Create user and send invitation**.
 
+Provision the backend identity once with
+`scripts/provision-controlt-service.sh`. The transitional provisioning script
+uses the existing bootstrap-administrator secret only to create or update the
+backend-only `controlt-service` client. It grants `manage-users`, `view-users`,
+`query-users`, `query-organizations`, `view-clients`, and `query-clients`; it
+adds only those roles to the client's token scope and explicitly rejects realm,
+realm-client, and client-management roles or scopes. The script then verifies
+client-credentials access to the required read APIs and writes the credential
+and a generated ControlT session secret to
+`/opt/go-portal/secrets/controlt.env` with `root:root:600` permissions. It never
+prints either secret. Step 3 removes the remaining Secrets Manager bootstrap
+dependency from normal maintenance.
+
 Run `scripts/invite-organization-user.sh` on the identity instance with
 `USER_EMAIL`, `FIRST_NAME`, `LAST_NAME`, and `ORGANIZATION_ALIAS` set. The script:
 
