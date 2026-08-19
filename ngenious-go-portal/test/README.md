@@ -36,7 +36,8 @@ create offline recovery administrators.
 The backend implementation is in [`controlt/`](controlt/). It provides the
 organization-scoped JSON API, Keycloak OIDC sign-in, protected server sessions,
 invitation orchestration, application-role assignment, and audit events. The
-customer-facing interface and hostname cutover are separate deployment steps.
+same directory now includes the responsive customer-administrator interface.
+The hostname cutover remains a separate deployment step.
 
 ## Deploy
 

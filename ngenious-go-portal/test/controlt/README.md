@@ -4,6 +4,10 @@ This directory contains the server-side administration facade approved in
 `../CONTROLT-ARCHITECTURE.md`. It uses Node.js 22 built-in APIs and has no
 runtime package dependencies.
 
+The `public/` directory contains the responsive customer-administrator
+interface. It presents people, status, approved application access, invitations,
+and enable/disable actions without exposing Keycloak concepts or credentials.
+
 ## Responsibilities
 
 - authenticate administrators with Keycloak Authorization Code + PKCE;
@@ -46,7 +50,7 @@ Optional settings include `PORT`, `CONTROLT_PUBLIC_ORIGIN`,
 | `GET` | `/healthz` | Process health |
 | `GET` | `/auth/login` | Start Keycloak sign-in |
 | `GET` | `/auth/callback` | Complete Keycloak sign-in |
-| `POST` | `/auth/logout` | End the local administrator session |
+| `POST` | `/auth/logout` | End the local and Keycloak administrator sessions |
 | `GET` | `/api/session` | Current administrator and CSRF token |
 | `GET` | `/api/organizations` | Organizations permitted to the administrator |
 | `GET` | `/api/organizations/:id/applications` | Approved applications |

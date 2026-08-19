@@ -1,5 +1,6 @@
 import http from "node:http";
 import { randomUUID, timingSafeEqual } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { loadConfig } from "./lib/config.mjs";
 import { HttpError, publicError } from "./lib/errors.mjs";
 import { KeycloakAdmin, KeycloakApiError } from "./lib/keycloak.mjs";
@@ -15,11 +16,28 @@ const service = new ControlTService(config, keycloak);
 
 function securityHeaders(response, requestId) {
   response.setHeader("cache-control", "no-store");
-  response.setHeader("content-security-policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+  response.setHeader("content-security-policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
   response.setHeader("referrer-policy", "same-origin");
   response.setHeader("x-content-type-options", "nosniff");
   response.setHeader("x-frame-options", "DENY");
   response.setHeader("x-request-id", requestId);
+}
+
+const staticFiles = new Map([
+  ["/", { url: new URL("./public/index.html", import.meta.url), type: "text/html; charset=utf-8" }],
+  ["/assets/app.css", { url: new URL("./public/app.css", import.meta.url), type: "text/css; charset=utf-8" }],
+  ["/assets/app.js", { url: new URL("./public/app.js", import.meta.url), type: "text/javascript; charset=utf-8" }],
+  ["/assets/ngenious-logo.png", { url: new URL("../theme/ngenious-go/login/resources/img/ngenious-logo.png", import.meta.url), type: "image/png" }],
+  ["/favicon.ico", { url: new URL("../theme/ngenious-go/login/resources/img/ngenious-robot-v1.ico", import.meta.url), type: "image/x-icon" }],
+]);
+
+async function staticFile(response, pathname) {
+  const asset = staticFiles.get(pathname);
+  if (!asset) return false;
+  const payload = await readFile(asset.url);
+  response.writeHead(200, { "content-type": asset.type, "content-length": payload.length });
+  response.end(payload);
+  return true;
 }
 
 function json(response, status, body) {
@@ -120,12 +138,11 @@ async function route(request, response) {
   if (request.method === "POST" && url.pathname === "/auth/logout") {
     const session = authenticated(request);
     csrf(request, session);
-    response.statusCode = 204;
     response.setHeader("set-cookie", sessions.deleteSession(request.headers.cookie));
-    return response.end();
+    return json(response, 200, { redirect: await oidc.logoutUrl() });
   }
   if (url.pathname.startsWith("/api/")) return api(request, response, url);
-  if (request.method === "GET" && url.pathname === "/") return json(response, 200, { service: "ControlT", status: "backend-ready", signIn: "/auth/login" });
+  if (request.method === "GET" && await staticFile(response, url.pathname)) return;
   throw new HttpError(404, "not_found", "The requested endpoint does not exist.");
 }
 

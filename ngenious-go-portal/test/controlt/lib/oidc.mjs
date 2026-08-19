@@ -18,6 +18,11 @@ export class OidcClient {
     return `${this.internalIssuer}${endpoint.slice(this.config.issuer.length)}`;
   }
 
+  issuerEndpoint(endpoint) {
+    if (typeof endpoint !== "string" || !endpoint.startsWith(`${this.config.issuer}/`)) throw new Error("OIDC endpoint is outside the configured issuer");
+    return endpoint;
+  }
+
   async metadata() {
     if (this.discovery) return this.discovery;
     const response = await this.fetch(`${this.internalIssuer}/.well-known/openid-configuration`);
@@ -34,7 +39,7 @@ export class OidcClient {
     const nonce = randomValue();
     const verifier = randomValue(48);
     const challenge = createHash("sha256").update(verifier).digest("base64url");
-    const url = new URL(metadata.authorization_endpoint);
+    const url = new URL(this.issuerEndpoint(metadata.authorization_endpoint));
     url.search = new URLSearchParams({
       client_id: this.config.oidcClientId,
       redirect_uri: this.config.redirectUri,
@@ -46,6 +51,17 @@ export class OidcClient {
       code_challenge_method: "S256",
     });
     return { url: url.href, flow: { state, nonce, verifier } };
+  }
+
+  async logoutUrl() {
+    const metadata = await this.metadata();
+    if (!metadata.end_session_endpoint) return this.config.publicOrigin;
+    const url = new URL(this.issuerEndpoint(metadata.end_session_endpoint));
+    url.search = new URLSearchParams({
+      client_id: this.config.oidcClientId,
+      post_logout_redirect_uri: this.config.publicOrigin,
+    });
+    return url.href;
   }
 
   async exchange(code, flow) {
