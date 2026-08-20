@@ -22,6 +22,15 @@ recovery_password="Ngr!2026-$(openssl rand -hex 20)"
 recovery_created=false
 recovery_authenticated=false
 
+report_error() {
+  local status=$?
+  local line=$1
+  printf 'Ole Media organization configuration failed at line %s (status %s).\n' \
+    "$line" "$status" >&2
+  return "$status"
+}
+trap 'report_error "$LINENO"' ERR
+
 kc() {
   docker exec "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh "$@"
 }
@@ -238,6 +247,7 @@ if [[ $(printf '%s' "$realm_permissions" | jq -r '.adminPermissionsEnabled // fa
 fi
 admin_permissions_client_id=$(kc get clients -r "$REALM" \
   -q clientId=admin-permissions --fields id,clientId | jq -er '.[0].id')
+printf 'Configuring Control organization membership permission.\n'
 control_policy_name=control-service-account-policy
 control_permission_name=control-operational-organizations
 control_policy_id=$(kc get \
@@ -252,6 +262,7 @@ if [[ -z "$control_policy_id" ]]; then
       --arg user "$control_service_user_id" \
       '{name:$name, logic:"POSITIVE", users:[$user]}')" -i)
 fi
+printf 'Control service-account policy is present.\n'
 control_permission_payload=$(jq -cn \
   --arg name "$control_permission_name" \
   --arg ole "$organization_id" \
@@ -271,6 +282,7 @@ else
     "clients/$admin_permissions_client_id/authz/resource-server/permission/scope/$control_permission_id" \
     -r "$REALM" -b "$control_permission_payload" >/dev/null
 fi
+printf 'Control operational-organization permission is present.\n'
 
 configured_control_permission=$(kc get \
   "clients/$admin_permissions_client_id/authz/resource-server/permission" \
@@ -281,6 +293,7 @@ printf '%s' "$configured_control_permission" | jq -e \
    (.scopes | index("manage") != null) and
    (.resources | index($ole) != null) and
    (.resources | index($ngenious) != null)' >/dev/null
+printf 'Control operational-organization permission verified.\n'
 
 for membership_organization_id in "$organization_id" "$ngenious_organization_id"; do
   kc get "organizations/$membership_organization_id/members" -r "$REALM" \
