@@ -117,6 +117,9 @@ await test("serves the application to an authenticated administrator", async () 
   assert.equal(res.statusCode, 200);
   assert.match(res.body, /<!doctype html>/i);
   assert.match(res.body, /Control administration/);
+  assert.match(res.body, />Team</);
+  assert.match(res.body, /Add team member/);
+  assert.doesNotMatch(res.body, />People</);
   assert.doesNotMatch(res.body, /ControlT/);
   assert.match(res.headers.get("content-security-policy"), /frame-ancestors 'none'/);
   assert.equal(res.headers.get("x-frame-options"), "DENY");

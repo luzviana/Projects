@@ -151,15 +151,15 @@ function renderMembers() {
   elements["member-list"].replaceChildren();
   elements["member-list"].hidden = filtered.length === 0;
   elements["empty-state"].hidden = filtered.length !== 0;
-  elements["result-count"].textContent = `${filtered.length} ${filtered.length === 1 ? "person" : "people"}`;
+  elements["result-count"].textContent = `${filtered.length} ${filtered.length === 1 ? "team member" : "team members"}`;
 
   if (!filtered.length) {
-    elements["empty-title"].textContent = state.members.length ? "No matching people" : "No people yet";
-    elements["empty-copy"].textContent = state.members.length ? "Try a different name or email." : "Add the first person to this organization.";
+    elements["empty-title"].textContent = state.members.length ? "No matching team members" : "No team members yet";
+    elements["empty-copy"].textContent = state.members.length ? "Try a different name or email." : "Add the first member of this team.";
   } else {
     const header = document.createElement("div");
     header.className = "member-row header";
-    for (const label of ["Person", "Status", "Applications", "Actions"]) {
+    for (const label of ["Team member", "Status", "Applications", "Actions"]) {
       const cell = document.createElement("span");
       cell.textContent = label;
       header.append(cell);
@@ -209,7 +209,7 @@ function renderLoadingRows() {
   row.className = "member-row";
   const copy = document.createElement("span");
   copy.className = "muted";
-  copy.textContent = "Loading people…";
+  copy.textContent = "Loading team…";
   row.append(copy);
   elements["member-list"].append(row);
   for (const id of ["total-count", "pending-count", "active-count"]) elements[id].textContent = "–";
@@ -220,7 +220,7 @@ async function loadOrganization(organizationId) {
   clearError();
   renderLoadingRows();
   state.organization = state.organizations.find((organization) => organization.id === organizationId);
-  elements["organization-description"].textContent = state.organization ? `Manage people and access for ${state.organization.name}.` : "Manage people and application access.";
+  elements["organization-description"].textContent = state.organization ? `Manage the ${state.organization.name} team and its access.` : "Manage your team and application access.";
   try {
     const [applications, members] = await Promise.all([
       api(`/api/organizations/${encodeURIComponent(organizationId)}/applications`),

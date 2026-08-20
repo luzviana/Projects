@@ -33,7 +33,7 @@
       <div class="signin-copy">
         <p class="eyebrow">Control administration</p>
         <h1>Manage your customer accounts</h1>
-        <p>Access tools for people, applications, and other customer account services in one place.</p>
+        <p>Access tools for teams, applications, and other customer account services in one place.</p>
         <a class="button primary" href="/auth/login">Sign in</a>
       </div>
     </section>
@@ -42,10 +42,10 @@
       <div class="page-heading">
         <div>
           <p class="eyebrow">Control administration</p>
-          <h1>People</h1>
-          <p class="muted" id="organization-description">Manage people and application access.</p>
+          <h1>Team</h1>
+          <p class="muted" id="organization-description">Manage your team and application access.</p>
         </div>
-        <button class="button primary" id="add-user-button" type="button">Add user</button>
+        <button class="button primary" id="add-user-button" type="button">Add team member</button>
       </div>
 
       <div class="organization-picker" id="organization-picker" hidden>
@@ -58,15 +58,15 @@
         <button class="text-button" id="retry-button" type="button">Try again</button>
       </div>
 
-      <div class="summary" aria-label="People summary">
-        <div><strong id="total-count">–</strong><span>Total people</span></div>
+      <div class="summary" aria-label="Team summary">
+        <div><strong id="total-count">–</strong><span>Team members</span></div>
         <div><strong id="pending-count">–</strong><span>Pending setup</span></div>
         <div><strong id="active-count">–</strong><span>Active</span></div>
       </div>
 
       <div class="toolbar">
         <label class="search" for="member-search">
-          <span class="sr-only">Search people</span>
+          <span class="sr-only">Search team</span>
           <input id="member-search" type="search" placeholder="Search by name or email" autocomplete="off">
         </label>
         <span class="result-count" id="result-count" aria-live="polite"></span>
@@ -74,8 +74,8 @@
 
       <div class="member-list" id="member-list" aria-live="polite"></div>
       <div class="empty-state" id="empty-state" hidden>
-        <h2 id="empty-title">No people yet</h2>
-        <p id="empty-copy">Add the first person to this organization.</p>
+        <h2 id="empty-title">No team members yet</h2>
+        <p id="empty-copy">Add the first member of this team.</p>
       </div>
     </section>
 
@@ -90,7 +90,7 @@
       <div class="dialog-header">
         <div>
           <p class="eyebrow">New account</p>
-          <h2 id="add-user-title">Add user</h2>
+          <h2 id="add-user-title">Add team member</h2>
         </div>
         <button class="icon-button" type="button" data-close-dialog="add-user-dialog" aria-label="Close">×</button>
       </div>
@@ -102,13 +102,13 @@
       <label>Email address<input name="email" type="email" maxlength="254" autocomplete="email" required></label>
       <fieldset>
         <legend>Applications</legend>
-        <p class="field-help">Choose only the applications this person needs.</p>
+        <p class="field-help">Choose only the applications this team member needs.</p>
         <div class="application-options" id="add-application-options"></div>
       </fieldset>
       <div class="form-error" id="add-user-error" role="alert" hidden></div>
       <div class="dialog-actions">
         <button class="button secondary" type="button" data-close-dialog="add-user-dialog">Cancel</button>
-        <button class="button primary" id="create-user-button" type="submit">Create user and send invitation</button>
+        <button class="button primary" id="create-user-button" type="submit">Create member and send invitation</button>
       </div>
     </form>
   </dialog>

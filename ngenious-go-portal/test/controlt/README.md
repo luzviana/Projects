@@ -12,7 +12,7 @@ container name, environment-variable prefix, and Keycloak client IDs remain
 unchanged to avoid a risky infrastructure migration.
 
 The `public/` directory contains the responsive customer-administrator
-interface. It presents people, status, approved application access, invitations,
+interface. It presents team members, status, approved application access, invitations,
 and enable/disable actions without exposing Keycloak concepts or credentials.
 
 ## Responsibilities

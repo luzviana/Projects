@@ -41,7 +41,7 @@ export class ControlTService {
   actorType(session) {
     if (session.roles.includes(this.config.internalAdminRole)) return "internal";
     if (session.roles.includes(this.config.customerAdminRole)) return "customer";
-    throw new HttpError(403, "administrator_required", "Your account is not authorized to administer users.");
+    throw new HttpError(403, "administrator_required", "Your account is not authorized to administer this team.");
   }
 
   async permittedOrganizations(session) {
