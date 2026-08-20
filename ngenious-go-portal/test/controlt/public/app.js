@@ -1,4 +1,4 @@
-const state = { session: null, csrf: null, mode: null, organizations: [], applications: [], members: [], editingMember: null };
+const state = { session: null, csrf: null, mode: null, organizations: [], applications: [], members: [], editingMember: null, deletingMember: null };
 const byId = (id) => document.getElementById(id);
 const elements = Object.fromEntries([
   "signin-panel", "workspace", "loading-panel", "user-menu", "user-menu-button", "user-menu-popover",
@@ -8,7 +8,8 @@ const elements = Object.fromEntries([
   "add-user-dialog", "add-user-form", "add-organization-fieldset", "add-organization-options",
   "add-application-options", "add-user-error", "create-user-button", "access-dialog", "access-form",
   "access-user", "edit-organization-fieldset", "edit-organization-options", "edit-application-options",
-  "access-error", "save-access-button", "toast",
+  "access-error", "save-access-button", "delete-user-dialog", "delete-user-form", "delete-user-name",
+  "delete-user-organizations", "delete-user-error", "confirm-delete-user-button", "toast",
 ].map((id) => [id, byId(id)]));
 
 class ApiError extends Error {
@@ -112,6 +113,7 @@ function renderMembers() {
     if (member.status === "Pending") actions.append(actionButton("Resend invitation", "secondary", (event) => resendInvitation(member, event.currentTarget)));
     actions.append(actionButton(state.mode === "internal" ? "Manage" : "Manage access", "secondary", () => openAccess(member)));
     const enable = member.status === "Disabled"; actions.append(actionButton(enable ? "Enable" : "Disable", enable ? "secondary" : "danger", () => changeEnabled(member, enable)));
+    if (state.mode === "internal" && member.id !== state.session.user.sub) actions.append(actionButton("Delete", "danger", () => openDelete(member)));
     row.append(person);
     if (state.mode === "internal") row.append(tags(member.organizationIds, orgNames, "organization"));
     row.append(status, tags(member.applications, appNames, "application"), actions);
@@ -164,6 +166,18 @@ function openAccess(member) {
   elements["access-dialog"].showModal();
 }
 
+function openDelete(member) {
+  state.deletingMember = member;
+  elements["delete-user-error"].hidden = true;
+  elements["delete-user-name"].textContent = `${member.firstName} ${member.lastName}`.trim() || member.email;
+  const names = organizationNames();
+  const organizations = member.organizationIds.map((id) => names.get(id) || id);
+  elements["delete-user-organizations"].textContent = organizations.length
+    ? `Organizations affected: ${organizations.join(", ")}.`
+    : "No organization memberships are currently assigned.";
+  elements["delete-user-dialog"].showModal();
+}
+
 async function submitAddUser(event) {
   event.preventDefault(); elements["add-user-error"].hidden = true; elements["create-user-button"].disabled = true;
   const form = new FormData(elements["add-user-form"]); const organizationIds = state.mode === "internal" ? selected(elements["add-organization-options"], "organizations") : [state.organizations[0].id];
@@ -180,6 +194,24 @@ async function submitAccess(event) {
     await api(`/api/team/users/${encodeURIComponent(state.editingMember.id)}`, { method: "PATCH", body: { organizationIds, applications: selected(elements["edit-application-options"], "applications") } });
     elements["access-dialog"].close(); toast("Team membership and application access updated."); await loadTeam();
   } catch (error) { setFormError(elements["access-error"], error); } finally { elements["save-access-button"].disabled = false; }
+}
+
+async function submitDeleteUser(event) {
+  event.preventDefault();
+  elements["delete-user-error"].hidden = true;
+  elements["confirm-delete-user-button"].disabled = true;
+  const member = state.deletingMember;
+  try {
+    await api(`/api/team/users/${encodeURIComponent(member.id)}`, { method: "DELETE" });
+    elements["delete-user-dialog"].close();
+    state.deletingMember = null;
+    toast(`${member.email} was permanently deleted.`);
+    await loadTeam();
+  } catch (error) {
+    setFormError(elements["delete-user-error"], error);
+  } finally {
+    elements["confirm-delete-user-button"].disabled = false;
+  }
 }
 
 async function resendInvitation(member, button) {
@@ -200,6 +232,7 @@ elements["member-search"].addEventListener("input", renderMembers);
 elements["add-user-button"].addEventListener("click", openAddUser);
 elements["add-user-form"].addEventListener("submit", submitAddUser);
 elements["access-form"].addEventListener("submit", submitAccess);
+elements["delete-user-form"].addEventListener("submit", submitDeleteUser);
 elements["add-organization-options"].addEventListener("change", () => syncApplicationOptions(elements["add-organization-options"], elements["add-application-options"], selected(elements["add-application-options"], "applications")));
 elements["edit-organization-options"].addEventListener("change", () => syncApplicationOptions(elements["edit-organization-options"], elements["edit-application-options"], selected(elements["edit-application-options"], "applications")));
 elements["retry-button"].addEventListener("click", loadTeam);

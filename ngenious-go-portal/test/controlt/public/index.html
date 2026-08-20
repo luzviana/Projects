@@ -141,6 +141,29 @@
     </form>
   </dialog>
 
+  <dialog id="delete-user-dialog" aria-labelledby="delete-user-title">
+    <form id="delete-user-form">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow danger-text">Permanent deletion</p>
+          <h2 id="delete-user-title">Delete account</h2>
+        </div>
+        <button class="icon-button" type="button" data-close-dialog="delete-user-dialog" aria-label="Close">×</button>
+      </div>
+      <p class="dialog-intro">Delete <strong id="delete-user-name"></strong>?</p>
+      <div class="deletion-warning">
+        <strong>This cannot be undone.</strong>
+        <p>The person will lose sign-in and application access across every organization.</p>
+        <p id="delete-user-organizations"></p>
+      </div>
+      <div class="form-error" id="delete-user-error" role="alert" hidden></div>
+      <div class="dialog-actions">
+        <button class="button secondary" type="button" data-close-dialog="delete-user-dialog">Cancel</button>
+        <button class="button danger solid" id="confirm-delete-user-button" type="submit">Delete account</button>
+      </div>
+    </form>
+  </dialog>
+
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 </body>
 </html>

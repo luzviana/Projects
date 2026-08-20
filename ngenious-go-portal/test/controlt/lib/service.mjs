@@ -193,6 +193,9 @@ export class ControlTService {
           }
         }
         await this.applyApplications(existing.id, selected, selection.applications);
+        if (existing.enabled && !existing.emailVerified) {
+          await this.keycloak.sendSetupEmail(existing.id, this.config.invitationLifespanSeconds);
+        }
       } catch (error) {
         for (const organizationId of addedOrganizationIds.reverse()) {
           try { await this.keycloak.removeOrganizationMember(organizationId, existing.id); } catch {}
@@ -201,7 +204,13 @@ export class ControlTService {
         throw error;
       }
       audit({ outcome: "success", operation: "assign_existing_member", actor: session.sub, target: existing.id, organizations: selection.organizationIds });
-      return { id: existing.id, email, status: statusOf(existing), created: false, invitationSent: false };
+      return {
+        id: existing.id,
+        email,
+        status: statusOf(existing),
+        created: false,
+        invitationSent: existing.enabled && !existing.emailVerified,
+      };
     }
 
     let userId;
@@ -280,6 +289,17 @@ export class ControlTService {
     if (user.emailVerified) throw new HttpError(409, "member_already_active", "This person has already completed setup.");
     await this.keycloak.sendSetupEmail(userId, this.config.invitationLifespanSeconds);
     return { id: userId, email: user.email || user.username, status: "Pending" };
+  }
+
+  async deleteTeamMember(session, userId) {
+    if (this.actorType(session) !== "internal") {
+      throw new HttpError(403, "internal_administrator_required", "Only an ngenious administrator can permanently delete an account.");
+    }
+    if (userId === session.sub) throw new HttpError(409, "self_delete_forbidden", "You cannot delete your own administrator account.");
+    const { user, memberships } = await this.teamMember(session, userId);
+    await this.keycloak.deleteUser(userId);
+    audit({ outcome: "success", operation: "delete_team_member", actor: session.sub, target: userId, organizations: memberships.map(({ id }) => id) });
+    return { id: userId, email: user.email || user.username, deleted: true };
   }
 
   validateApplications(requested, applications) {

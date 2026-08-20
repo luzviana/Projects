@@ -177,10 +177,10 @@ memberships or roles.
 ### Existing identity
 
 - For an internal administrator, an existing identity is reused and assigned
-  to any additional selected organizations. It remains one person and receives
-  no duplicate invitation.
-- If an identity's onboarding is pending, Control offers **Resend invitation**
-  and preserves the user identifier and permissions.
+  to any additional selected organizations. It remains one person.
+- If that identity's onboarding is pending and the account is enabled, adding
+  it sends a fresh setup email automatically while preserving the user
+  identifier and permissions. Control also offers **Resend invitation**.
 - If the identity is already active in the same organization, ControlT reports
   that status instead of sending an unexpected password-change email.
 - A customer administrator cannot absorb an identity from another organization;
@@ -201,12 +201,19 @@ The customer-administrator page contains:
 - **Enable** or **Disable** when permitted.
 
 The internal-administrator version lists each person once and adds organization
-membership controls to the add and manage dialogs. The account menu opened from
-the user's initials links to the branded Keycloak account console for password,
-session, and other self-service identity management.
+membership controls to the add and manage dialogs. It also provides permanent
+**Delete account** with a confirmation that lists every affected organization.
+Customer administrators cannot permanently delete identities. The account menu
+opened from the user's initials links to the branded Keycloak account console
+for password, session, and other self-service identity management.
 
 The Add user form contains only first name, last name, email, and permitted
 applications. Its primary action is **Create user and send invitation**.
+
+The Keycloak invitation landing page uses the short heading **Set up your
+account** and one **Continue** action. Expired or previously used invitation
+links show a concise explanation directing the person to request a new
+invitation; they do not show Keycloak's generic **Back to application** link.
 
 The interface does not expose email-verification flags, required-action lists,
 credentials, OTP, WebAuthn, groups, raw roles, realm configuration, clients, or

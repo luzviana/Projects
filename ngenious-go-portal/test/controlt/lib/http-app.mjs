@@ -94,6 +94,10 @@ export function createRequestHandler({ config, sessions, oidc, service, logError
         csrf(request, session);
         return json(response, 200, { user: await service.resendTeamInvitation(session, segments[3]) });
       }
+      if (request.method === "DELETE" && segments.length === 4) {
+        csrf(request, session);
+        return json(response, 200, { user: await service.deleteTeamMember(session, segments[3]) });
+      }
     }
     if (request.method === "GET" && url.pathname === "/api/organizations") return json(response, 200, { organizations: await service.listOrganizations(session) });
     if (segments[0] !== "api" || segments[1] !== "organizations" || !segments[2]) throw new HttpError(404, "not_found", "The requested endpoint does not exist.");

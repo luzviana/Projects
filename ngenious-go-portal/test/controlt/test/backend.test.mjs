@@ -152,6 +152,23 @@ test("internal administrators update memberships without duplicating a person", 
   ]);
 });
 
+test("adding an existing pending team member sends a new setup invitation", async () => {
+  const keycloak = fakeKeycloak({
+    findUserByEmail: async () => ({
+      id: "existing", email: "person@example.com", enabled: true, emailVerified: false,
+    }),
+    userOrganizations: async () => [],
+  });
+  const service = new ControlTService(config, keycloak);
+  const result = await service.addTeamMember(internal, {
+    email: "person@example.com", firstName: "Person", lastName: "Example",
+    organizationIds: ["org-a"], applications: [],
+  });
+  assert.equal(result.created, false);
+  assert.equal(result.invitationSent, true);
+  assert.deepEqual(keycloak.calls.map(([name]) => name), ["addOrganizationMember", "sendSetupEmail"]);
+});
+
 test("a failed multi-organization assignment rolls back memberships added to an existing identity", async () => {
   const organizations = [
     { id: "org-a", name: "Alpha", attributes: { "ngenious.allowedApplications": [] } },
@@ -312,6 +329,31 @@ test("enable and disable updates change only the enabled field", async () => {
   assert.equal(result.status, "Disabled");
   const update = keycloak.calls.find(([name]) => name === "updateUser");
   assert.deepEqual(update, ["updateUser", "user-1", { enabled: false }]);
+});
+
+test("only an internal administrator can permanently delete a team identity", async () => {
+  const keycloak = fakeKeycloak();
+  const service = new ControlTService(config, keycloak);
+  const result = await service.deleteTeamMember(internal, "user-1");
+  assert.equal(result.deleted, true);
+  assert.deepEqual(keycloak.calls.at(-1), ["deleteUser", "user-1"]);
+
+  const customerKeycloak = fakeKeycloak();
+  await assert.rejects(
+    () => new ControlTService(config, customerKeycloak).deleteTeamMember(customer, "user-1"),
+    (error) => error.status === 403 && error.code === "internal_administrator_required",
+  );
+  assert.equal(customerKeycloak.calls.length, 0);
+});
+
+test("an internal administrator cannot delete their own account", async () => {
+  const keycloak = fakeKeycloak();
+  const service = new ControlTService(config, keycloak);
+  await assert.rejects(
+    () => service.deleteTeamMember(internal, internal.sub),
+    (error) => error.status === 409 && error.code === "self_delete_forbidden",
+  );
+  assert.equal(keycloak.calls.length, 0);
 });
 
 test("member status is derived from enabled and verified state", async () => {

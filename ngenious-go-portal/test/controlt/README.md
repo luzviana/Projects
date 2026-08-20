@@ -33,8 +33,11 @@ organization, so organization controls are not shown to them.
   `ngenious.allowedApplications` attribute;
 - create identities without passwords and ask Keycloak to send the branded
   `VERIFY_EMAIL` + `UPDATE_PASSWORD` action email;
-- safely resend pending invitations, enable or disable members, and update
-  approved application access; and
+- automatically send a fresh setup email when an existing pending identity is
+  added, safely resend pending invitations, enable or disable members, and
+  update approved application access;
+- let only an ngenious administrator permanently delete an identity, with an
+  explicit organization-impact confirmation in the interface; and
 - write structured audit events without credentials or action links.
 
 It does not connect to SMTP, build password links, store passwords, access the
@@ -72,6 +75,7 @@ Optional settings include `PORT`, `CONTROLT_PUBLIC_ORIGIN`,
 | `POST` | `/api/team/users` | Create one identity, assign one or more organizations, and send one invitation |
 | `PATCH` | `/api/team/users/:userId` | Update memberships, enabled state, and application access |
 | `POST` | `/api/team/users/:userId/resend` | Resend one pending identity invitation |
+| `DELETE` | `/api/team/users/:userId` | Permanently delete an identity; ngenious administrators only |
 | `GET` | `/api/organizations` | Organizations permitted to the administrator |
 | `GET` | `/api/organizations/:id/applications` | Approved applications |
 | `GET` | `/api/organizations/:id/members` | Organization members and status |
@@ -90,14 +94,14 @@ npm run check
 ```
 
 The checked-in tests use an in-memory Keycloak substitute and never create
-users or send email. The suite currently covers 48 workflow, authorization,
+users or send email. The suite currently covers 52 workflow, authorization,
 request-security, session, and identity-token checks, including:
 
 - organization isolation and administrator-role enforcement;
 - consolidated multi-organization membership and correct Keycloak member API
   routing;
-- create, duplicate, resend, rollback, enable/disable, and application-access
-  behavior;
+- create, duplicate, automatic pending-user resend, manual resend, rollback,
+  enable/disable, administrator-only deletion, and application-access behavior;
 - authentication, CSRF, request parsing and size limits, logout, safe errors,
   and browser security headers; and
 - signed OIDC token verification for signature, issuer, audience, expiry,

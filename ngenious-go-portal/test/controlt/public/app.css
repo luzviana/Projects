@@ -168,6 +168,8 @@ h2 { margin-bottom: 0.5rem; font-size: 1.4rem; }
 .button.secondary { border-color: var(--line); color: var(--ink); background: #ffffff; }
 .button.secondary:hover:not(:disabled) { border-color: #aebdc6; background: #f8fafb; }
 .button.danger { border-color: #f2c4bf; color: var(--danger); background: #ffffff; }
+.button.danger.solid { border-color: var(--danger); color: #ffffff; background: var(--danger); }
+.button.danger.solid:hover:not(:disabled) { background: #8f1c13; }
 .button.small { min-height: 2.25rem; padding: 0.45rem 0.75rem; font-size: 0.86rem; }
 
 .workspace { display: flex; flex-direction: column; gap: 1.5rem; }
@@ -267,6 +269,9 @@ dialog form { display: flex; flex-direction: column; gap: 1.15rem; padding: clam
 .dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .dialog-header h2 { margin-bottom: 0; font-size: 1.75rem; }
 .dialog-intro { margin-bottom: 0; color: var(--ink-soft); line-height: 1.55; }
+.danger-text { color: var(--danger); }
+.deletion-warning { padding: 1rem; border: 1px solid #f1c1bc; border-radius: 0.6rem; color: var(--danger); background: var(--danger-pale); }
+.deletion-warning p { margin: 0.4rem 0 0; color: #7a271f; line-height: 1.5; }
 .icon-button { width: 2.25rem; height: 2.25rem; padding: 0; border: 0; border-radius: 50%; color: var(--ink-soft); font-size: 1.75rem; line-height: 1; background: transparent; }
 .icon-button:hover { background: var(--canvas); }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
