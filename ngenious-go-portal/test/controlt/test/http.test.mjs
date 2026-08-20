@@ -97,9 +97,23 @@ async function invoke(handler, options) {
   return res;
 }
 
-await test("serves the application with browser security headers", async () => {
+await test("redirects an unauthenticated root request directly to sign-in", async () => {
   const { handler } = harness();
   const res = await invoke(handler, { url: "/" });
+  assert.equal(res.statusCode, 302);
+  assert.equal(res.headers.get("location"), "https://id.example.test/authorize");
+  assert.match(res.headers.get("set-cookie")[0], /^controlt_oidc=/);
+  assert.match(res.headers.get("set-cookie")[0], /HttpOnly/);
+  assert.match(res.headers.get("set-cookie")[0], /Secure/);
+  assert.match(res.headers.get("content-security-policy"), /frame-ancestors 'none'/);
+  assert.equal(res.headers.get("x-frame-options"), "DENY");
+  assert.equal(res.headers.get("cache-control"), "no-store");
+  assert.ok(res.headers.get("x-request-id"));
+});
+
+await test("serves the application to an authenticated administrator", async () => {
+  const { handler, authHeaders } = harness();
+  const res = await invoke(handler, { url: "/", headers: authHeaders });
   assert.equal(res.statusCode, 200);
   assert.match(res.body, /<!doctype html>/i);
   assert.match(res.body, /Control administration/);

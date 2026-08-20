@@ -143,11 +143,14 @@ test "$public_ready" = true
 
 root_status=$(curl --max-time 10 -sS -o /dev/null -w '%{http_code}' \
   https://controlt.ngenious.app/)
+root_location=$(curl --max-time 10 -sS -o /dev/null -w '%{redirect_url}' \
+  https://controlt.ngenious.app/)
 api_status=$(curl --max-time 10 -sS -o /dev/null -w '%{http_code}' \
   https://controlt.ngenious.app/api/organizations)
 login_location=$(curl --max-time 10 -sS -o /dev/null -w '%{redirect_url}' \
   https://controlt.ngenious.app/auth/login)
-[[ "$root_status" == 200 ]]
+[[ "$root_status" == 302 ]]
+[[ "$root_location" == https://id.ngenious.app/realms/go-portal-test/* ]]
 [[ "$api_status" == 401 ]]
 [[ "$login_location" == https://id.ngenious.app/realms/go-portal-test/* ]]
 
@@ -157,4 +160,4 @@ if [[ "$had_previous" == true ]]; then
   printf 'Previous ControlT container retained as %s for rollback.\n' "$BACKUP_CONTAINER"
 fi
 printf 'ControlT deployed from %s without restarting Keycloak.\n' "$release"
-printf 'Public page, authentication redirect, and protected API boundary verified.\n'
+printf 'Automatic authentication redirect and protected API boundary verified.\n'

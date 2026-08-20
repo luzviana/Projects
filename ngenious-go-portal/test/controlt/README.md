@@ -54,6 +54,7 @@ Optional settings include `PORT`, `CONTROLT_PUBLIC_ORIGIN`,
 
 | Method | Path | Purpose |
 | --- | --- | --- |
+| `GET` | `/` | Open Control when signed in, or start Keycloak sign-in automatically |
 | `GET` | `/healthz` | Process health |
 | `GET` | `/auth/login` | Start Keycloak sign-in |
 | `GET` | `/auth/callback` | Complete Keycloak sign-in |
@@ -77,7 +78,7 @@ npm run check
 ```
 
 The checked-in tests use an in-memory Keycloak substitute and never create
-users or send email. The suite currently covers 38 workflow, authorization,
+users or send email. The suite currently covers 39 workflow, authorization,
 request-security, session, and identity-token checks, including:
 
 - organization isolation and administrator-role enforcement;

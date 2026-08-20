@@ -103,7 +103,7 @@ export function createRequestHandler({ config, sessions, oidc, service, logError
   async function route(request, response) {
     const url = new URL(request.url, config.publicOrigin);
     if (request.method === "GET" && url.pathname === "/healthz") return json(response, 200, { status: "ok" });
-    if (request.method === "GET" && url.pathname === "/auth/login") {
+    if (request.method === "GET" && (url.pathname === "/auth/login" || (url.pathname === "/" && !sessions.getSession(request.headers.cookie)))) {
       const { url: authorizationUrl, flow } = await oidc.createAuthorization();
       return redirect(response, authorizationUrl, [sessions.createOauthFlow(flow)]);
     }
