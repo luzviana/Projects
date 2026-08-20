@@ -184,10 +184,22 @@ export class ControlTService {
       if (selection.actorType === "customer" && !memberships.some((organization) => organization.id === selection.organizationIds[0])) {
         throw new HttpError(409, "incompatible_identity", "This email belongs to an identity outside your organization. Contact ngenious support.");
       }
-      for (const organizationId of selection.organizationIds) {
-        if (!memberships.some((organization) => organization.id === organizationId)) await this.keycloak.addOrganizationMember(organizationId, existing.id);
+      const addedOrganizationIds = [];
+      try {
+        for (const organizationId of selection.organizationIds) {
+          if (!memberships.some((organization) => organization.id === organizationId)) {
+            await this.keycloak.addOrganizationMember(organizationId, existing.id);
+            addedOrganizationIds.push(organizationId);
+          }
+        }
+        await this.applyApplications(existing.id, selected, selection.applications);
+      } catch (error) {
+        for (const organizationId of addedOrganizationIds.reverse()) {
+          try { await this.keycloak.removeOrganizationMember(organizationId, existing.id); } catch {}
+        }
+        audit({ outcome: "failed", operation: "assign_existing_member", actor: session.sub, target: existing.id, organizations: selection.organizationIds });
+        throw error;
       }
-      await this.applyApplications(existing.id, selected, selection.applications);
       audit({ outcome: "success", operation: "assign_existing_member", actor: session.sub, target: existing.id, organizations: selection.organizationIds });
       return { id: existing.id, email, status: statusOf(existing), created: false, invitationSent: false };
     }

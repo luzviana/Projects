@@ -179,6 +179,14 @@ secret are stored in `/opt/go-portal/secrets/controlt.env` with
 identity during their one-time local bootstrap. The existing PoC was migrated
 once with `scripts/provision-controlt-service.sh`.
 
+Organization membership changes additionally require a Keycloak 26.7
+Fine-Grained Admin Permission. The trusted organization provisioning workflow
+grants the service account `view` and `manage` only for explicitly configured
+operational organizations. It never grants the realm-wide
+`manage-organizations` role. Keycloak currently has no organization
+membership-only scope, so Control deliberately exposes no API for updating or
+deleting organization records.
+
 Run `scripts/invite-organization-user.sh` as root on the identity instance with
 `USER_EMAIL`, `FIRST_NAME`, `LAST_NAME`, and `ORGANIZATION_ALIAS` set. The script:
 
@@ -340,8 +348,9 @@ invitations, change the application client secret, or use AWS Secrets Manager.
 It uses a temporary local Keycloak recovery administrator, removes it before
 exit, and causes a brief Keycloak restart while it is created. The script also
 ensures that the restricted Control service has Keycloak's read-only
-`view-organizations` role. It does not grant `manage-organizations` or any other
-organization-configuration permission. The Keycloak client is displayed as
+`view-organizations` role and a specific Fine-Grained Admin Permission to
+manage membership for Ole Media and ngenious. It does not grant the realm-wide
+`manage-organizations` role. The Keycloak client is displayed as
 `Streamer Monitor`. Control receives only that client's ordinary `access` role
 and token scope, allowing it to grant or remove Streamer access for team members
 without permission to configure the application client.

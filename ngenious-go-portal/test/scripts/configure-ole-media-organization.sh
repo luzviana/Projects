@@ -228,6 +228,60 @@ for membership_organization_id in "$organization_id" "$ngenious_organization_id"
   fi
 done
 
+# Keycloak 26.7 requires both user-manage permission and organization-manage
+# permission when Control adds or removes an organization member. Grant the
+# service account manage access only to the operational organizations configured
+# here. Do not grant the realm-wide manage-organizations role.
+realm_permissions=$(kc get "realms/$REALM" --fields adminPermissionsEnabled)
+if [[ $(printf '%s' "$realm_permissions" | jq -r '.adminPermissionsEnabled // false') != true ]]; then
+  kc update "realms/$REALM" -s adminPermissionsEnabled=true >/dev/null
+fi
+admin_permissions_client_id=$(kc get clients -r "$REALM" \
+  -q clientId=admin-permissions --fields id,clientId | jq -er '.[0].id')
+control_policy_name=control-service-account-policy
+control_permission_name=control-operational-organizations
+control_policy_id=$(kc get \
+  "clients/$admin_permissions_client_id/authz/resource-server/policy" \
+  -r "$REALM" -q name="$control_policy_name" -q exact=true \
+  --fields id,name | jq -r '.[0].id // empty')
+if [[ -z "$control_policy_id" ]]; then
+  control_policy_id=$(kc create \
+    "clients/$admin_permissions_client_id/authz/resource-server/policy/user" \
+    -r "$REALM" \
+    -b "$(jq -cn --arg name "$control_policy_name" \
+      --arg user "$control_service_user_id" \
+      '{name:$name, logic:"POSITIVE", users:[$user]}')" -i)
+fi
+control_permission_payload=$(jq -cn \
+  --arg name "$control_permission_name" \
+  --arg ole "$organization_id" \
+  --arg ngenious "$ngenious_organization_id" \
+  --arg policy "$control_policy_name" \
+  '{name:$name, resourceType:"Organizations", scopes:["view","manage"], resources:[$ole,$ngenious], policies:[$policy]}')
+control_permission_id=$(kc get \
+  "clients/$admin_permissions_client_id/authz/resource-server/permission" \
+  -r "$REALM" -q name="$control_permission_name" -q exact=true \
+  --fields id,name | jq -r '.[0].id // empty')
+if [[ -z "$control_permission_id" ]]; then
+  kc create \
+    "clients/$admin_permissions_client_id/authz/resource-server/permission/scope" \
+    -r "$REALM" -b "$control_permission_payload" >/dev/null
+else
+  kc update \
+    "clients/$admin_permissions_client_id/authz/resource-server/permission/scope/$control_permission_id" \
+    -r "$REALM" -b "$control_permission_payload" >/dev/null
+fi
+
+configured_control_permission=$(kc get \
+  "clients/$admin_permissions_client_id/authz/resource-server/permission" \
+  -r "$REALM" -q name="$control_permission_name" -q exact=true)
+printf '%s' "$configured_control_permission" | jq -e \
+  --arg ole "$organization_id" --arg ngenious "$ngenious_organization_id" \
+  '.[0] | (.scopes | index("view") != null) and
+   (.scopes | index("manage") != null) and
+   (.resources | index($ole) != null) and
+   (.resources | index($ngenious) != null)' >/dev/null
+
 for membership_organization_id in "$organization_id" "$ngenious_organization_id"; do
   kc get "organizations/$membership_organization_id/members" -r "$REALM" \
     --fields id | jq -e --arg id "$ngenious_admin_id" \
@@ -236,3 +290,4 @@ done
 
 printf '%s is a member of Ole Media and ngenious. No users were created or invited.\n' \
   "$NGENIOUS_ADMIN_EMAIL"
+printf 'Control can manage membership only for Ole Media and ngenious.\n'

@@ -90,7 +90,7 @@ npm run check
 ```
 
 The checked-in tests use an in-memory Keycloak substitute and never create
-users or send email. The suite currently covers 47 workflow, authorization,
+users or send email. The suite currently covers 48 workflow, authorization,
 request-security, session, and identity-token checks, including:
 
 - organization isolation and administrator-role enforcement;

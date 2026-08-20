@@ -152,6 +152,33 @@ test("internal administrators update memberships without duplicating a person", 
   ]);
 });
 
+test("a failed multi-organization assignment rolls back memberships added to an existing identity", async () => {
+  const organizations = [
+    { id: "org-a", name: "Alpha", attributes: { "ngenious.allowedApplications": [] } },
+    { id: "org-b", name: "Beta", attributes: { "ngenious.allowedApplications": [] } },
+  ];
+  const keycloak = fakeKeycloak({
+    listOrganizations: async () => organizations,
+    getOrganization: async (id) => organizations.find((organization) => organization.id === id),
+    findUserByEmail: async () => ({ id: "existing", email: "person@example.com", enabled: true, emailVerified: true }),
+    userOrganizations: async () => [],
+    addOrganizationMember: async (organizationId, userId) => {
+      keycloak.calls.push(["addOrganizationMember", organizationId, userId]);
+      if (organizationId === "org-b") throw new Error("organization denied");
+    },
+  });
+  const service = new ControlTService(config, keycloak);
+  await assert.rejects(() => service.addTeamMember(internal, {
+    email: "person@example.com", firstName: "Person", lastName: "Example",
+    organizationIds: ["org-a", "org-b"], applications: [],
+  }), /organization denied/);
+  assert.deepEqual(keycloak.calls.filter(([name]) => name.includes("OrganizationMember")), [
+    ["addOrganizationMember", "org-a", "existing"],
+    ["addOrganizationMember", "org-b", "existing"],
+    ["removeOrganizationMember", "org-a", "existing"],
+  ]);
+});
+
 test("administrator sessions use current server-side Control roles", async () => {
   const keycloak = fakeKeycloak({
     userClientRoles: async () => [{ name: "ngenious-admin" }, { name: "unrelated-role" }],

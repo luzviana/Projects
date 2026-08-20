@@ -140,6 +140,16 @@ client must expose the dedicated `access` client role. ControlT resolves this
 allowlist and the roles server-side and rejects browser-supplied applications
 that are not listed.
 
+Keycloak 26.7 requires organization `manage` authorization as well as user
+`manage` authorization to add or remove organization membership. It does not
+offer a membership-only organization scope. The Control service therefore
+receives a Fine-Grained Admin Permission for `view` and `manage` on the
+explicitly configured operational organizations only; it never receives the
+realm-wide `manage-organizations` role. Control's own API exposes membership
+operations but no organization update or deletion operation. Adding another
+customer organization requires the trusted provisioning workflow to add that
+specific organization resource to the permission.
+
 ## User invitation workflow
 
 ### New identity

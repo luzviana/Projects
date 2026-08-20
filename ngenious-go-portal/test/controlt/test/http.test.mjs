@@ -271,6 +271,7 @@ await test("does not expose an identity-provider error body", async () => {
   assert.equal(res.statusCode, 502);
   assert.equal(res.json.error, "identity_service_error");
   assert.doesNotMatch(res.body, /sensitive/);
+  assert.deepEqual({ type: h.errors[0].type, upstreamStatus: h.errors[0].upstreamStatus }, { type: "controlt.identity_error", upstreamStatus: 500 });
 });
 
 await test("returns a secured 404 for an unknown route", async () => {

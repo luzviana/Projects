@@ -149,7 +149,11 @@ export function createRequestHandler({ config, sessions, oidc, service, logError
     } catch (error) {
       const mapped = error instanceof KeycloakApiError ? new HttpError(502, "identity_service_error", "The identity service could not complete the request.") : error;
       const result = publicError(mapped);
-      if (!(error instanceof HttpError) && !(error instanceof KeycloakApiError)) logError({ type: "controlt.error", time: new Date().toISOString(), requestId, message: error?.message || "Unknown error" });
+      if (error instanceof KeycloakApiError) {
+        logError({ type: "controlt.identity_error", time: new Date().toISOString(), requestId, upstreamStatus: error.status });
+      } else if (!(error instanceof HttpError)) {
+        logError({ type: "controlt.error", time: new Date().toISOString(), requestId, message: error?.message || "Unknown error" });
+      }
       if (!response.headersSent) json(response, result.status, result.body);
       else response.destroy();
     }
