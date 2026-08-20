@@ -3,6 +3,7 @@ import test from "node:test";
 import { createSessionStore } from "../lib/sessions.mjs";
 import { ControlTService } from "../lib/service.mjs";
 import { OidcClient } from "../lib/oidc.mjs";
+import { KeycloakAdmin } from "../lib/keycloak.mjs";
 
 const config = {
   internalAdminRole: "ngenious-admin",
@@ -27,6 +28,7 @@ function fakeKeycloak(overrides = {}) {
     findUserByEmail: async () => null,
     createUser: async (user) => { calls.push(["createUser", user]); return "user-new"; },
     addOrganizationMember: async (...args) => calls.push(["addOrganizationMember", ...args]),
+    removeOrganizationMember: async (...args) => calls.push(["removeOrganizationMember", ...args]),
     addClientRole: async (...args) => calls.push(["addClientRole", ...args]),
     removeClientRole: async (...args) => calls.push(["removeClientRole", ...args]),
     sendSetupEmail: async (...args) => calls.push(["sendSetupEmail", ...args]),
@@ -77,6 +79,77 @@ test("customer administrators are bound to one organization", async () => {
   const service = new ControlTService(config, keycloak);
   assert.deepEqual(await service.listOrganizations(customer), [{ id: "org-a", name: "Alpha", alias: undefined, enabled: undefined }]);
   await assert.rejects(() => service.listApplications(customer, "org-b"), (error) => error.status === 403 && error.code === "organization_forbidden");
+});
+
+test("Keycloak membership requests use the realm organization-member endpoint", async () => {
+  const requests = [];
+  const client = new KeycloakAdmin({
+    keycloakInternalUrl: "http://keycloak:8080",
+    realm: "go-portal-test",
+    serviceClientId: "controlt-service",
+    serviceClientSecret: "secret",
+  }, async (url, options = {}) => {
+    requests.push([url, options.method || "GET"]);
+    if (url.endsWith("/protocol/openid-connect/token")) {
+      return new Response(JSON.stringify({ access_token: "token", expires_in: 60 }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    if (options.method === "DELETE") return new Response(null, { status: 204 });
+    return new Response("[]", { status: 200, headers: { "content-type": "application/json" } });
+  });
+  await client.userOrganizations("person / one");
+  await client.removeOrganizationMember("org / one", "person / one");
+  assert.equal(requests[1][0], "http://keycloak:8080/admin/realms/go-portal-test/organizations/members/person%20%2F%20one/organizations");
+  assert.equal(requests[2][0], "http://keycloak:8080/admin/realms/go-portal-test/organizations/org%20%2F%20one/members/person%20%2F%20one");
+  assert.equal(requests[2][1], "DELETE");
+});
+
+test("internal Team view shows a multi-organization person only once", async () => {
+  const organizations = [
+    { id: "org-a", name: "Alpha", attributes: { "ngenious.allowedApplications": ["app-a"] } },
+    { id: "org-b", name: "Beta", attributes: { "ngenious.allowedApplications": ["app-b"] } },
+  ];
+  const applications = {
+    "app-a": { id: "client-a", clientId: "app-a", name: "Application A", role: { id: "role-a", name: "access" } },
+    "app-b": { id: "client-b", clientId: "app-b", name: "Application B", role: { id: "role-b", name: "access" } },
+  };
+  const keycloak = fakeKeycloak({
+    listOrganizations: async () => organizations,
+    getOrganization: async (id) => organizations.find((organization) => organization.id === id),
+    organizationMembers: async () => [{ id: "person-1" }],
+    getUser: async () => ({ id: "person-1", email: "person@example.com", firstName: "Person", lastName: "One", enabled: true, emailVerified: true }),
+    application: async (id) => applications[id],
+    userClientRoles: async (_userId, clientId) => clientId === "client-a" ? [applications["app-a"].role] : [],
+  });
+  const team = await new ControlTService(config, keycloak).team(internal);
+  assert.equal(team.mode, "internal");
+  assert.equal(team.members.length, 1);
+  assert.deepEqual(team.members[0].organizationIds, ["org-a", "org-b"]);
+  assert.deepEqual(team.members[0].applications, ["app-a"]);
+  assert.deepEqual(team.applications.find((application) => application.id === "app-a").organizationIds, ["org-a"]);
+});
+
+test("customer Team view is fixed to one organization", async () => {
+  const team = await new ControlTService(config, fakeKeycloak()).team(customer);
+  assert.equal(team.mode, "customer");
+  assert.deepEqual(team.organizations.map(({ id }) => id), ["org-a"]);
+});
+
+test("internal administrators update memberships without duplicating a person", async () => {
+  const organizations = [
+    { id: "org-a", name: "Alpha", attributes: { "ngenious.allowedApplications": [] } },
+    { id: "org-b", name: "Beta", attributes: { "ngenious.allowedApplications": [] } },
+  ];
+  const keycloak = fakeKeycloak({
+    listOrganizations: async () => organizations,
+    getOrganization: async (id) => organizations.find((organization) => organization.id === id),
+    userOrganizations: async (userId) => userId === internal.sub ? organizations : [organizations[0]],
+  });
+  const result = await new ControlTService(config, keycloak).updateTeamMember(internal, "person-1", { organizationIds: ["org-b"], applications: [] });
+  assert.deepEqual(result.organizationIds, ["org-b"]);
+  assert.deepEqual(keycloak.calls.filter(([name]) => name.includes("OrganizationMember")), [
+    ["removeOrganizationMember", "org-a", "person-1"],
+    ["addOrganizationMember", "org-b", "person-1"],
+  ]);
 });
 
 test("administrator sessions use current server-side Control roles", async () => {

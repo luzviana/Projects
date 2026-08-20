@@ -67,7 +67,7 @@ export class KeycloakAdmin {
   }
 
   userOrganizations(userId) {
-    return this.request(`/users/${encodeURIComponent(userId)}/organizations`);
+    return this.request(`/organizations/members/${encodeURIComponent(userId)}/organizations`);
   }
 
   organizationMembers(organizationId) {
@@ -76,6 +76,10 @@ export class KeycloakAdmin {
 
   addOrganizationMember(organizationId, userId) {
     return this.request(`/organizations/${encodeURIComponent(organizationId)}/members`, { method: "POST", body: userId, expected: [201, 204] });
+  }
+
+  removeOrganizationMember(organizationId, userId) {
+    return this.request(`/organizations/${encodeURIComponent(organizationId)}/members/${encodeURIComponent(userId)}`, { method: "DELETE", expected: [204] });
   }
 
   async findUserByEmail(email) {

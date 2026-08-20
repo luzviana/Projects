@@ -69,6 +69,10 @@ function harness() {
   };
   const service = {
     async sessionForAdministrator(identity) { return identity; },
+    async team(session) { calls.push(["team", session]); return { mode: "internal", organizations: [], applications: [], members: [] }; },
+    async addTeamMember(session, body) { calls.push(["addTeamMember", session, body]); return { id: "user-1", status: "Pending" }; },
+    async updateTeamMember(session, userId, body) { calls.push(["updateTeamMember", session, userId, body]); return { id: userId, ...body }; },
+    async resendTeamInvitation(session, userId) { calls.push(["resendTeamInvitation", session, userId]); return { id: userId, status: "Pending" }; },
     async listOrganizations(session) { calls.push(["listOrganizations", session]); return [{ id: "org-1", name: "Example" }]; },
     async listApplications(session, organizationId) { calls.push(["listApplications", session, organizationId]); return []; },
     async listMembers(session, organizationId) { calls.push(["listMembers", session, organizationId]); return []; },
@@ -120,6 +124,8 @@ await test("serves the application to an authenticated administrator", async () 
   assert.match(res.body, /Control administration/);
   assert.match(res.body, />Team</);
   assert.match(res.body, /Add team member/);
+  assert.match(res.body, /Manage my account/);
+  assert.match(res.body, /https:\/\/id\.ngenious\.app\/realms\/go-portal-test\/account\//);
   assert.doesNotMatch(res.body, />People</);
   assert.doesNotMatch(res.body, /ControlT/);
   assert.match(res.headers.get("content-security-policy"), /frame-ancestors 'none'/);
@@ -159,6 +165,35 @@ await test("returns only the signed-in user's safe session fields", async () => 
   });
   assert.equal(res.json.csrf, created.session.csrf);
   assert.equal(res.json.user.expiresAt, undefined);
+});
+
+await test("returns the consolidated Team view", async () => {
+  const { handler, authHeaders, calls } = harness();
+  const res = await invoke(handler, { url: "/api/team", headers: authHeaders });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.json.team.mode, "internal");
+  assert.equal(calls[0][0], "team");
+});
+
+await test("creates one Team identity with multiple organization memberships", async () => {
+  const { handler, authHeaders, calls } = harness();
+  const body = { email: "person@example.test", firstName: "Person", lastName: "One", organizationIds: ["org-1", "org-2"], applications: ["streamer"] };
+  const res = await invoke(handler, {
+    method: "POST", url: "/api/team/users", headers: { ...authHeaders, "content-type": "application/json" }, body: JSON.stringify(body),
+  });
+  assert.equal(res.statusCode, 201);
+  assert.equal(calls[0][0], "addTeamMember");
+  assert.deepEqual(calls[0][2], body);
+});
+
+await test("updates consolidated organization and application access", async () => {
+  const { handler, authHeaders, calls } = harness();
+  const body = { organizationIds: ["org-2"], applications: ["streamer"] };
+  const res = await invoke(handler, {
+    method: "PATCH", url: "/api/team/users/person%20one", headers: { ...authHeaders, "content-type": "application/json" }, body: JSON.stringify(body),
+  });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(calls[0].slice(0, 4), ["updateTeamMember", calls[0][1], "person one", body]);
 });
 
 await test("rejects a write when the CSRF token is missing", async () => {

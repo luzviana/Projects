@@ -11,9 +11,11 @@ Technical identifiers such as the `controlt.ngenious.app` test hostname,
 container name, environment-variable prefix, and Keycloak client IDs remain
 unchanged to avoid a risky infrastructure migration.
 
-The `public/` directory contains the responsive customer-administrator
-interface. It presents team members, status, approved application access, invitations,
-and enable/disable actions without exposing Keycloak concepts or credentials.
+The `public/` directory contains the responsive administration interface. A
+person appears once even when they belong to several organizations. Internal
+administrators manage that person's organization memberships and application
+access from the same row. Customer administrators remain fixed to their one
+organization, so organization controls are not shown to them.
 
 ## Responsibilities
 
@@ -25,6 +27,8 @@ and enable/disable actions without exposing Keycloak concepts or credentials.
 - confirm the current Control role directly with Keycloak when each
   administrator session is created;
 - bind customer administrators to exactly one organization server-side;
+- consolidate internal administrators' members across organizations by their
+  single Keycloak identity;
 - validate application requests against the organization's
   `ngenious.allowedApplications` attribute;
 - create identities without passwords and ask Keycloak to send the branded
@@ -64,6 +68,10 @@ Optional settings include `PORT`, `CONTROLT_PUBLIC_ORIGIN`,
 | `GET` | `/auth/callback` | Complete Keycloak sign-in |
 | `POST` | `/auth/logout` | End the local and Keycloak administrator sessions |
 | `GET` | `/api/session` | Current administrator and CSRF token |
+| `GET` | `/api/team` | Consolidated people, organizations, and applications permitted to the administrator |
+| `POST` | `/api/team/users` | Create one identity, assign one or more organizations, and send one invitation |
+| `PATCH` | `/api/team/users/:userId` | Update memberships, enabled state, and application access |
+| `POST` | `/api/team/users/:userId/resend` | Resend one pending identity invitation |
 | `GET` | `/api/organizations` | Organizations permitted to the administrator |
 | `GET` | `/api/organizations/:id/applications` | Approved applications |
 | `GET` | `/api/organizations/:id/members` | Organization members and status |
@@ -82,10 +90,12 @@ npm run check
 ```
 
 The checked-in tests use an in-memory Keycloak substitute and never create
-users or send email. The suite currently covers 40 workflow, authorization,
+users or send email. The suite currently covers 47 workflow, authorization,
 request-security, session, and identity-token checks, including:
 
 - organization isolation and administrator-role enforcement;
+- consolidated multi-organization membership and correct Keycloak member API
+  routing;
 - create, duplicate, resend, rollback, enable/disable, and application-access
   behavior;
 - authentication, CSRF, request parsing and size limits, logout, safe errors,

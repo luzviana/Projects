@@ -111,11 +111,16 @@ A customer administrator is bound to exactly one Keycloak organization and may:
 A customer administrator may not select or supply another organization, view
 another organization's members, manage Keycloak clients or roles, edit login
 flows, configure MFA, or open the native Keycloak administration console.
+Because only one organization is available, the interface does not display an
+organization selector or organization-membership controls.
 
 ### ngenious internal administrator
 
-An ngenious internal administrator uses the same ControlT workflow but may
-select among authorized customer organizations. This role does not
+An ngenious internal administrator uses a people-first Team view across all
+authorized customer organizations. Each Keycloak identity appears once, with
+its organization memberships and approved application access shown together.
+The administrator can add an existing identity to another organization without
+creating a duplicate person or sending a second invitation. This role does not
 automatically grant unrestricted Keycloak realm administration. Operational
 access to the native console is a separate emergency capability.
 
@@ -140,11 +145,14 @@ that are not listed.
 ### New identity
 
 1. Validate and normalize the email address and names.
-2. Resolve the administrator's permitted organization on the server.
-3. Validate requested applications against that organization's allowlist.
+2. Resolve every selected organization against the administrator's permitted
+   organizations on the server. Customer administrators are fixed to their one
+   organization.
+3. Validate requested applications against the selected organizations'
+   combined allowlist.
 4. Confirm that the email is not already owned by an incompatible identity.
 5. Create an enabled Keycloak user with `emailVerified=false` and no password.
-6. Add the user to the permitted organization.
+6. Add the user to every selected organization.
 7. Assign only the selected, permitted application access.
 8. Call `execute-actions-email` with `VERIFY_EMAIL` and `UPDATE_PASSWORD` and a
    12-hour lifespan.
@@ -158,20 +166,21 @@ memberships or roles.
 
 ### Existing identity
 
-- If the identity belongs to the same organization and onboarding is pending,
-  ControlT offers **Resend invitation** and preserves the user identifier and
-  permissions.
+- For an internal administrator, an existing identity is reused and assigned
+  to any additional selected organizations. It remains one person and receives
+  no duplicate invitation.
+- If an identity's onboarding is pending, Control offers **Resend invitation**
+  and preserves the user identifier and permissions.
 - If the identity is already active in the same organization, ControlT reports
   that status instead of sending an unexpected password-change email.
-- If the identity belongs to another customer or has an ambiguous ownership
-  state, ControlT refuses the operation and directs the administrator to
-  ngenious support.
+- A customer administrator cannot absorb an identity from another organization;
+  that case is refused and directed to ngenious support.
 - ControlT never deletes and recreates an existing identity merely to resend an
   invitation.
 
 ## Customer interface
 
-The initial customer-administrator page contains:
+The customer-administrator page contains:
 
 - organization name, displayed read-only;
 - a searchable member list;
@@ -180,6 +189,11 @@ The initial customer-administrator page contains:
 - **Add user**;
 - **Resend invitation** for pending users; and
 - **Enable** or **Disable** when permitted.
+
+The internal-administrator version lists each person once and adds organization
+membership controls to the add and manage dialogs. The account menu opened from
+the user's initials links to the branded Keycloak account console for password,
+session, and other self-service identity management.
 
 The Add user form contains only first name, last name, email, and permitted
 applications. Its primary action is **Create user and send invitation**.

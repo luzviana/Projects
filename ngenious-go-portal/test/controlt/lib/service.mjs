@@ -111,6 +111,165 @@ export class ControlTService {
     return members;
   }
 
+  async team(session) {
+    const actorType = this.actorType(session);
+    const summaries = await this.permittedOrganizations(session);
+    const organizations = await Promise.all(summaries.map((organization) => this.keycloak.getOrganization(organization.id)));
+    const applicationMap = new Map();
+    for (const organization of organizations) {
+      for (const application of await this.applicationsFor(organization)) {
+        const current = applicationMap.get(application.clientId) || { ...application, organizationIds: new Set() };
+        current.organizationIds.add(organization.id);
+        applicationMap.set(application.clientId, current);
+      }
+    }
+    const applications = [...applicationMap.values()];
+    const memberMap = new Map();
+    for (const organization of organizations) {
+      for (const summary of await this.keycloak.organizationMembers(organization.id)) {
+        const current = memberMap.get(summary.id) || { id: summary.id, organizationIds: new Set() };
+        current.organizationIds.add(organization.id);
+        memberMap.set(summary.id, current);
+      }
+    }
+    const members = [];
+    for (const current of memberMap.values()) {
+      const user = await this.keycloak.getUser(current.id);
+      members.push({
+        id: user.id,
+        email: user.email || user.username,
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        status: statusOf(user),
+        organizationIds: [...current.organizationIds],
+        applications: await this.assignedApplications(user.id, applications),
+      });
+    }
+    return {
+      mode: actorType,
+      organizations: organizations.map(({ id, name, alias, enabled }) => ({ id, name, alias, enabled })),
+      applications: applications.map(({ clientId, name, organizationIds }) => ({ id: clientId, name, organizationIds: [...organizationIds] })),
+      members,
+    };
+  }
+
+  async resolveTeamSelection(session, input) {
+    const actorType = this.actorType(session);
+    const permitted = await this.permittedOrganizations(session);
+    const requestedIds = stringArray(input.organizationIds, "organizationIds");
+    const selectedIds = actorType === "customer" ? [permitted[0].id] : requestedIds;
+    if (!selectedIds.length) throw new HttpError(400, "organization_required", "Choose at least one organization.");
+    const permittedMap = new Map(permitted.map((organization) => [organization.id, organization]));
+    if (requestedIds.some((id) => !permittedMap.has(id)) || (actorType === "customer" && requestedIds.some((id) => id !== permitted[0].id))) {
+      throw new HttpError(403, "organization_forbidden", "One or more organizations are not available to this administrator.");
+    }
+    const organizations = await Promise.all(selectedIds.map((id) => this.keycloak.getOrganization(id)));
+    const applicationMap = new Map();
+    for (const organization of organizations) {
+      for (const application of await this.applicationsFor(organization)) applicationMap.set(application.clientId, application);
+    }
+    const applications = [...applicationMap.values()];
+    return { actorType, permitted, organizations, organizationIds: selectedIds, applications };
+  }
+
+  async addTeamMember(session, input) {
+    const selection = await this.resolveTeamSelection(session, input);
+    const selected = this.validateApplications(input.applications || [], selection.applications);
+    const email = emailAddress(input.email);
+    const firstName = text(input.firstName, "First name");
+    const lastName = text(input.lastName, "Last name");
+    const existing = await this.keycloak.findUserByEmail(email);
+    if (existing) {
+      const memberships = await this.keycloak.userOrganizations(existing.id);
+      if (selection.actorType === "customer" && !memberships.some((organization) => organization.id === selection.organizationIds[0])) {
+        throw new HttpError(409, "incompatible_identity", "This email belongs to an identity outside your organization. Contact ngenious support.");
+      }
+      for (const organizationId of selection.organizationIds) {
+        if (!memberships.some((organization) => organization.id === organizationId)) await this.keycloak.addOrganizationMember(organizationId, existing.id);
+      }
+      await this.applyApplications(existing.id, selected, selection.applications);
+      audit({ outcome: "success", operation: "assign_existing_member", actor: session.sub, target: existing.id, organizations: selection.organizationIds });
+      return { id: existing.id, email, status: statusOf(existing), created: false, invitationSent: false };
+    }
+
+    let userId;
+    try {
+      const now = new Date().toISOString();
+      userId = await this.keycloak.createUser({
+        username: email, email, firstName, lastName, enabled: true, emailVerified: false,
+        attributes: { "ngenious.invitedAt": [now], "ngenious.invitedBy": [session.sub] },
+      });
+      for (const organizationId of selection.organizationIds) await this.keycloak.addOrganizationMember(organizationId, userId);
+      await this.applyApplications(userId, selected, selection.applications);
+      await this.keycloak.sendSetupEmail(userId, this.config.invitationLifespanSeconds);
+      audit({ outcome: "success", operation: "create_team_member", actor: session.sub, target: userId, organizations: selection.organizationIds });
+      return { id: userId, email, status: "Pending", created: true, invitationSent: true };
+    } catch (error) {
+      if (userId) {
+        try { await this.keycloak.deleteUser(userId); } catch {}
+      }
+      audit({ outcome: "failed", operation: "create_team_member", actor: session.sub, target: userId || opaqueEmailTarget(email), organizations: selection.organizationIds });
+      throw error;
+    }
+  }
+
+  async teamMember(session, userId) {
+    const permitted = await this.permittedOrganizations(session);
+    const memberships = await this.keycloak.userOrganizations(userId);
+    if (!memberships.some((membership) => permitted.some((organization) => organization.id === membership.id))) {
+      throw new HttpError(404, "member_not_found", "The team member was not found.");
+    }
+    return { user: await this.keycloak.getUser(userId), memberships, permitted };
+  }
+
+  async updateTeamMember(session, userId, input) {
+    const actorType = this.actorType(session);
+    const current = await this.teamMember(session, userId);
+    const requestedOrganizationIds = actorType === "customer"
+      ? [current.permitted[0].id]
+      : stringArray(input.organizationIds, "organizationIds");
+    const selection = await this.resolveTeamSelection(session, { organizationIds: requestedOrganizationIds });
+    if (input.enabled !== undefined) {
+      if (typeof input.enabled !== "boolean") throw new HttpError(400, "invalid_input", "enabled must be true or false.");
+      await this.keycloak.updateUser(userId, { enabled: input.enabled });
+    }
+    if (actorType === "internal") {
+      const selectedIds = new Set(selection.organizationIds);
+      for (const organization of current.memberships) {
+        if (!selectedIds.has(organization.id)) await this.keycloak.removeOrganizationMember(organization.id, userId);
+      }
+      for (const organizationId of selection.organizationIds) {
+        if (!current.memberships.some((organization) => organization.id === organizationId)) await this.keycloak.addOrganizationMember(organizationId, userId);
+      }
+    }
+    const manageableMap = new Map();
+    for (const organization of await Promise.all(current.permitted.map((item) => this.keycloak.getOrganization(item.id)))) {
+      for (const application of await this.applicationsFor(organization)) manageableMap.set(application.clientId, application);
+    }
+    let selectedApplications = await this.assignedApplications(userId, selection.applications);
+    if (input.applications !== undefined) {
+      const resolved = this.validateApplications(input.applications, selection.applications);
+      await this.applyApplications(userId, resolved, [...manageableMap.values()]);
+      selectedApplications = resolved.map((application) => application.clientId);
+    }
+    audit({ outcome: "success", operation: "update_team_member", actor: session.sub, target: userId, organizations: selection.organizationIds });
+    return {
+      id: userId,
+      enabled: input.enabled ?? current.user.enabled,
+      status: statusOf({ ...current.user, enabled: input.enabled ?? current.user.enabled }),
+      organizationIds: selection.organizationIds,
+      applications: selectedApplications,
+    };
+  }
+
+  async resendTeamInvitation(session, userId) {
+    const { user } = await this.teamMember(session, userId);
+    if (!user.enabled) throw new HttpError(409, "member_disabled", "Enable this person before resending the invitation.");
+    if (user.emailVerified) throw new HttpError(409, "member_already_active", "This person has already completed setup.");
+    await this.keycloak.sendSetupEmail(userId, this.config.invitationLifespanSeconds);
+    return { id: userId, email: user.email || user.username, status: "Pending" };
+  }
+
   validateApplications(requested, applications) {
     const ids = stringArray(requested, "applications");
     const allowed = new Map(applications.map((application) => [application.clientId, application]));

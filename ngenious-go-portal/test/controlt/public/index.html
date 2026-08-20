@@ -23,6 +23,7 @@
           <strong id="menu-user-name"></strong>
           <span id="menu-user-email"></span>
         </div>
+        <a id="manage-account-link" role="menuitem" href="https://id.ngenious.app/realms/go-portal-test/account/">Manage my account</a>
         <button id="sign-out-button" role="menuitem" type="button">Sign out</button>
       </div>
     </div>
@@ -46,11 +47,6 @@
           <p class="muted" id="organization-description">Manage your team and application access.</p>
         </div>
         <button class="button primary" id="add-user-button" type="button">Add team member</button>
-      </div>
-
-      <div class="organization-picker" id="organization-picker" hidden>
-        <label for="organization-select">Organization</label>
-        <select id="organization-select"></select>
       </div>
 
       <div class="notice error" id="error-notice" role="alert" hidden>
@@ -100,6 +96,11 @@
         <label>Last name<input name="lastName" maxlength="120" autocomplete="family-name" required></label>
       </div>
       <label>Email address<input name="email" type="email" maxlength="254" autocomplete="email" required></label>
+      <fieldset id="add-organization-fieldset">
+        <legend>Organizations</legend>
+        <p class="field-help">Choose every organization this person belongs to.</p>
+        <div class="application-options" id="add-organization-options"></div>
+      </fieldset>
       <fieldset>
         <legend>Applications</legend>
         <p class="field-help">Choose only the applications this team member needs.</p>
@@ -117,12 +118,17 @@
     <form id="access-form">
       <div class="dialog-header">
         <div>
-          <p class="eyebrow">Application access</p>
-          <h2 id="access-title">Manage access</h2>
+          <p class="eyebrow">Team membership</p>
+          <h2 id="access-title">Manage organizations and access</h2>
         </div>
         <button class="icon-button" type="button" data-close-dialog="access-dialog" aria-label="Close">×</button>
       </div>
       <p class="dialog-intro" id="access-user"></p>
+      <fieldset id="edit-organization-fieldset">
+        <legend>Organizations</legend>
+        <p class="field-help">This person appears once in Team, even when they belong to several organizations.</p>
+        <div class="application-options" id="edit-organization-options"></div>
+      </fieldset>
       <fieldset>
         <legend>Applications</legend>
         <div class="application-options" id="edit-application-options"></div>

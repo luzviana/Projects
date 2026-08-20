@@ -332,7 +332,10 @@ ngenious administrator in Control administration. It also creates the
 `ngenious` organization and assigns the existing `cleber@ngenious.ai` internal
 administrator to both organizations. Multiple organization membership does not
 restrict the internal administrator role; customer administrators remain bound
-to exactly one organization. The script does not create users, send
+to exactly one organization. Control administration presents the internal
+administrator with one people-first Team list: a person appears once with all
+organization memberships, while a single-organization customer administrator
+does not see organization selection controls. The script does not create users, send
 invitations, change the application client secret, or use AWS Secrets Manager.
 It uses a temporary local Keycloak recovery administrator, removes it before
 exit, and causes a brief Keycloak restart while it is created. The script also

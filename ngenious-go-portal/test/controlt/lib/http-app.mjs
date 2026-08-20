@@ -80,6 +80,21 @@ export function createRequestHandler({ config, sessions, oidc, service, logError
     const session = authenticated(request);
     const segments = url.pathname.split("/").filter(Boolean).map(part);
     if (request.method === "GET" && url.pathname === "/api/session") return json(response, 200, { user: { sub: session.sub, email: session.email, name: session.name, roles: session.roles }, csrf: session.csrf });
+    if (request.method === "GET" && url.pathname === "/api/team") return json(response, 200, { team: await service.team(session) });
+    if (request.method === "POST" && url.pathname === "/api/team/users") {
+      csrf(request, session);
+      return json(response, 201, { user: await service.addTeamMember(session, await readJson(request)) });
+    }
+    if (segments[0] === "api" && segments[1] === "team" && segments[2] === "users" && segments[3]) {
+      if (request.method === "PATCH" && segments.length === 4) {
+        csrf(request, session);
+        return json(response, 200, { user: await service.updateTeamMember(session, segments[3], await readJson(request)) });
+      }
+      if (request.method === "POST" && segments.length === 5 && segments[4] === "resend") {
+        csrf(request, session);
+        return json(response, 200, { user: await service.resendTeamInvitation(session, segments[3]) });
+      }
+    }
     if (request.method === "GET" && url.pathname === "/api/organizations") return json(response, 200, { organizations: await service.listOrganizations(session) });
     if (segments[0] !== "api" || segments[1] !== "organizations" || !segments[2]) throw new HttpError(404, "not_found", "The requested endpoint does not exist.");
     const organizationId = segments[2];
