@@ -18,6 +18,7 @@ function fakeKeycloak(overrides = {}) {
   const api = {
     calls,
     listOrganizations: async () => [organization],
+    client: async () => ({ id: "control-client", clientId: "controlt-web" }),
     getOrganization: async () => organization,
     userOrganizations: async () => [organization],
     organizationMembers: async () => [],
@@ -76,6 +77,15 @@ test("customer administrators are bound to one organization", async () => {
   const service = new ControlTService(config, keycloak);
   assert.deepEqual(await service.listOrganizations(customer), [{ id: "org-a", name: "Alpha", alias: undefined, enabled: undefined }]);
   await assert.rejects(() => service.listApplications(customer, "org-b"), (error) => error.status === 403 && error.code === "organization_forbidden");
+});
+
+test("administrator sessions use current server-side Control roles", async () => {
+  const keycloak = fakeKeycloak({
+    userClientRoles: async () => [{ name: "ngenious-admin" }, { name: "unrelated-role" }],
+  });
+  const service = new ControlTService({ ...config, oidcClientId: "controlt-web" }, keycloak);
+  const session = await service.sessionForAdministrator({ sub: "admin-1", email: "admin@example.com", roles: [] });
+  assert.deepEqual(session.roles, ["ngenious-admin"]);
 });
 
 test("create and invite never handles a password and assigns only allowed access", async () => {

@@ -22,6 +22,8 @@ and enable/disable actions without exposing Keycloak concepts or credentials.
 - enforce the `ngenious-admin` and `organization-admin` ControlT client roles;
 - place those Control-only roles in the signed identity token used to establish
   the administrator session;
+- confirm the current Control role directly with Keycloak when each
+  administrator session is created;
 - bind customer administrators to exactly one organization server-side;
 - validate application requests against the organization's
   `ngenious.allowedApplications` attribute;
@@ -80,7 +82,7 @@ npm run check
 ```
 
 The checked-in tests use an in-memory Keycloak substitute and never create
-users or send email. The suite currently covers 39 workflow, authorization,
+users or send email. The suite currently covers 40 workflow, authorization,
 request-security, session, and identity-token checks, including:
 
 - organization isolation and administrator-role enforcement;

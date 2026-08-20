@@ -110,7 +110,8 @@ export function createRequestHandler({ config, sessions, oidc, service, logError
     if (request.method === "GET" && url.pathname === "/auth/callback") {
       const flow = sessions.takeOauthFlow(request.headers.cookie);
       if (!flow || !url.searchParams.get("state") || url.searchParams.get("state") !== flow.state || !url.searchParams.get("code")) throw new HttpError(401, "login_failed", "The sign-in response expired or could not be matched.");
-      const user = await oidc.exchange(url.searchParams.get("code"), flow);
+      const identity = await oidc.exchange(url.searchParams.get("code"), flow);
+      const user = await service.sessionForAdministrator(identity);
       const created = sessions.createSession(user);
       return redirect(response, config.postLoginPath, [created.cookie, sessions.clearOauthCookie()]);
     }

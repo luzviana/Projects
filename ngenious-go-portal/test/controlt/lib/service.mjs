@@ -44,6 +44,14 @@ export class ControlTService {
     throw new HttpError(403, "administrator_required", "Your account is not authorized to administer this team.");
   }
 
+  async sessionForAdministrator(identity) {
+    const client = await this.keycloak.client(this.config.oidcClientId);
+    if (!client) throw new HttpError(500, "administrator_configuration_error", "Control administration is not configured correctly.");
+    const assigned = await this.keycloak.userClientRoles(identity.sub, client.id);
+    const allowed = new Set([this.config.internalAdminRole, this.config.customerAdminRole]);
+    return { ...identity, roles: assigned.map((role) => role.name).filter((role) => allowed.has(role)) };
+  }
+
   async permittedOrganizations(session) {
     const actorType = this.actorType(session);
     if (actorType === "internal") return this.keycloak.listOrganizations();

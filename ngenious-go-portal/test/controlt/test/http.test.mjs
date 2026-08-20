@@ -68,6 +68,7 @@ function harness() {
     "x-controlt-csrf": created.session.csrf,
   };
   const service = {
+    async sessionForAdministrator(identity) { return identity; },
     async listOrganizations(session) { calls.push(["listOrganizations", session]); return [{ id: "org-1", name: "Example" }]; },
     async listApplications(session, organizationId) { calls.push(["listApplications", session, organizationId]); return []; },
     async listMembers(session, organizationId) { calls.push(["listMembers", session, organizationId]); return []; },

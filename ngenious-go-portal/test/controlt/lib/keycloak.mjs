@@ -122,8 +122,7 @@ export class KeycloakAdmin {
   }
 
   async application(clientId) {
-    const clients = await this.request(`/clients?clientId=${encodeURIComponent(clientId)}`);
-    const client = clients.find((candidate) => candidate.clientId === clientId);
+    const client = await this.client(clientId);
     if (!client || client.enabled === false || client.protocol !== "openid-connect") {
       throw new HttpError(500, "application_configuration_error", `Application ${clientId} is not configured for ControlT.`);
     }
@@ -137,6 +136,11 @@ export class KeycloakAdmin {
       throw error;
     }
     return { id: client.id, clientId, name: client.name || clientId, role };
+  }
+
+  async client(clientId) {
+    const clients = await this.request(`/clients?clientId=${encodeURIComponent(clientId)}`);
+    return clients.find((candidate) => candidate.clientId === clientId) || null;
   }
 
   userClientRoles(userId, clientUuid) {
