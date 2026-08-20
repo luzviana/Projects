@@ -136,6 +136,34 @@ for role_name in ngenious-admin organization-admin; do
     -r "$REALM" -b "[$role_json]" >/dev/null 2>&1 || true
 done
 
+role_mapper_name=controlt-client-roles
+role_mapper=$(jq -cn --arg name "$role_mapper_name" --arg clientId "$OIDC_CLIENT_ID" '{
+  name: $name,
+  protocol: "openid-connect",
+  protocolMapper: "oidc-usermodel-client-role-mapper",
+  consentRequired: false,
+  config: {
+    "usermodel.clientRoleMapping.clientId": $clientId,
+    "claim.name": ("resource_access." + $clientId + ".roles"),
+    "jsonType.label": "String",
+    "multivalued": "true",
+    "access.token.claim": "true",
+    "id.token.claim": "true",
+    "userinfo.token.claim": "true",
+    "introspection.token.claim": "true"
+  }
+}')
+role_mapper_id=$(kc get "clients/$client_uuid/protocol-mappers/models" \
+  -r "$REALM" --fields id,name | jq -r --arg name "$role_mapper_name" \
+  '.[] | select(.name == $name) | .id' | head -n 1)
+if [[ -z "$role_mapper_id" ]]; then
+  kc create "clients/$client_uuid/protocol-mappers/models" \
+    -r "$REALM" -b "$role_mapper" >/dev/null
+else
+  kc update "clients/$client_uuid/protocol-mappers/models/$role_mapper_id" \
+    -r "$REALM" -b "$role_mapper" >/dev/null
+fi
+
 oidc_secret=$(kc get "clients/$client_uuid/client-secret" -r "$REALM" \
   | jq -er .value)
 [[ ${#oidc_secret} -ge 20 ]]

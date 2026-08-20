@@ -20,6 +20,8 @@ and enable/disable actions without exposing Keycloak concepts or credentials.
 - authenticate administrators with Keycloak Authorization Code + PKCE;
 - maintain signed, server-side, 30-minute administrator sessions;
 - enforce the `ngenious-admin` and `organization-admin` ControlT client roles;
+- place those Control-only roles in the signed identity token used to establish
+  the administrator session;
 - bind customer administrators to exactly one organization server-side;
 - validate application requests against the organization's
   `ngenious.allowedApplications` attribute;
