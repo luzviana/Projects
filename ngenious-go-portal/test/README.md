@@ -111,7 +111,7 @@ administration console.
 To deploy on the existing identity host, stage `controlt/`, `Caddyfile`, and
 `scripts/deploy-controlt.sh` under `/tmp/controlt-deploy/`, then run the script
 as root. It runs the complete automated suite in an isolated container, starts
-ControlT on loopback port 3100, verifies local health, and only then reloads
+ControlT on loopback port 3100, verifies local health, and only then restarts
 Caddy. It verifies the public page, sign-in redirect, and unauthenticated API
 boundary. If any step fails, the prior Caddy route and ControlT container are
 restored. Keycloak is not stopped or restarted.

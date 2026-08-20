@@ -18,6 +18,13 @@ test -s "$STAGED_CADDYFILE"
 test -s "$SECRETS_FILE"
 test -s "$CADDYFILE"
 [[ $(stat -c '%U:%G:%a' "$SECRETS_FILE") == root:root:600 ]]
+for required_key in \
+  KEYCLOAK_INTERNAL_URL KEYCLOAK_ISSUER KEYCLOAK_REALM \
+  KEYCLOAK_ADMIN_CLIENT_ID KEYCLOAK_ADMIN_CLIENT_SECRET \
+  CONTROLT_OIDC_CLIENT_ID CONTROLT_OIDC_CLIENT_SECRET \
+  CONTROLT_SESSION_SECRET; do
+  grep -q "^${required_key}=.." "$SECRETS_FILE"
+done
 ! docker container inspect "$BACKUP_CONTAINER" >/dev/null 2>&1
 if [[ -e "$CURRENT_LINK" && ! -L "$CURRENT_LINK" ]]; then
   printf '%s must be a release symlink.\n' "$CURRENT_LINK" >&2
@@ -68,6 +75,8 @@ if docker container inspect "$CONTAINER" >/dev/null 2>&1; then
 fi
 
 rollback() {
+  status=$?
+  trap - ERR
   set +e
   docker rm -f "$CONTAINER" >/dev/null 2>&1
   if [[ "$had_previous" == true ]]; then
@@ -81,9 +90,9 @@ rollback() {
     rm -f -- "$CURRENT_LINK"
   fi
   cp -p "$caddy_backup" "$CADDYFILE"
-  docker exec caddy caddy reload \
-    --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1
+  docker restart caddy >/dev/null 2>&1
   printf 'ControlT deployment rolled back.\n' >&2
+  exit "$status"
 }
 trap rollback ERR
 
@@ -119,8 +128,7 @@ done
 test "$ready" = true
 
 install -o root -g root -m 0640 "$STAGED_CADDYFILE" "$CADDYFILE"
-docker exec caddy caddy reload \
-  --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
+docker restart caddy >/dev/null
 
 public_ready=false
 for attempt in $(seq 1 45); do
