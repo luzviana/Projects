@@ -70,7 +70,7 @@ function showSignin() {
 }
 
 function showError(error) {
-  elements["error-message"].textContent = error?.message || "ControlT could not load this organization.";
+  elements["error-message"].textContent = error?.message || "Control could not load this organization.";
   elements["error-notice"].hidden = false;
 }
 

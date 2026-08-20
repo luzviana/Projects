@@ -1,4 +1,4 @@
-# ControlT administration architecture
+# Control administration architecture
 
 Status: approved target for the shared-test PoC
 
@@ -6,11 +6,17 @@ Decision date: 2026-08-18
 
 ## Objective
 
-ControlT gives ngenious and customer administrators a simple, safe way to add
-people, assign permitted applications, and send an account-setup email. It
-removes Keycloak-specific concepts such as required actions, email-verification
-flags, credentials, WebAuthn, realm roles, and authentication flows from the
-customer workflow.
+**Control** is the administration workspace for ngenious Customer Account
+Managers and customer administrators. User onboarding and application access
+are its first capabilities; the product is intentionally positioned to support
+additional customer-account services later. It removes Keycloak-specific
+concepts such as required actions, email-verification flags, credentials,
+WebAuthn, realm roles, and authentication flows from the customer workflow.
+
+The early implementation name `ControlT` identified the test environment. The
+public product name is **Control**, and the page is labeled **Control
+administration**. Existing technical identifiers retain the `controlt` name
+until a separate infrastructure migration is justified.
 
 The target operation is:
 

@@ -1,8 +1,15 @@
-# ControlT backend
+# Control administration backend
 
-This directory contains the server-side administration facade approved in
+This directory contains the server-side implementation of **Control**, the
+broader Customer Account Manager administration workspace approved in
 `../CONTROLT-ARCHITECTURE.md`. It uses Node.js 22 built-in APIs and has no
 runtime package dependencies.
+
+`ControlT` was the early test-environment name. The public product name is
+**Control**, and its administration page is labeled **Control administration**.
+Technical identifiers such as the `controlt.ngenious.app` test hostname,
+container name, environment-variable prefix, and Keycloak client IDs remain
+unchanged to avoid a risky infrastructure migration.
 
 The `public/` directory contains the responsive customer-administrator
 interface. It presents people, status, approved application access, invitations,
@@ -70,7 +77,7 @@ npm run check
 ```
 
 The checked-in tests use an in-memory Keycloak substitute and never create
-users or send email. The suite currently covers 37 workflow, authorization,
+users or send email. The suite currently covers 38 workflow, authorization,
 request-security, session, and identity-token checks, including:
 
 - organization isolation and administrator-role enforcement;

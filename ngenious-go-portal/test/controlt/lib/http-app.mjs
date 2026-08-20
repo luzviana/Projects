@@ -7,8 +7,8 @@ const staticFiles = new Map([
   ["/", { url: new URL("../public/index.html", import.meta.url), type: "text/html; charset=utf-8" }],
   ["/assets/app.css", { url: new URL("../public/app.css", import.meta.url), type: "text/css; charset=utf-8" }],
   ["/assets/app.js", { url: new URL("../public/app.js", import.meta.url), type: "text/javascript; charset=utf-8" }],
-  ["/assets/ngenious-logo.png", { url: new URL("../../theme/ngenious-go/login/resources/img/ngenious-logo.png", import.meta.url), type: "image/png" }],
-  ["/favicon.ico", { url: new URL("../../theme/ngenious-go/login/resources/img/ngenious-robot-v1.ico", import.meta.url), type: "image/x-icon" }],
+  ["/assets/ngenious-logo.png", { url: new URL("../public/ngenious-logo.png", import.meta.url), type: "image/png" }],
+  ["/favicon.ico", { url: new URL("../public/ngenious-robot-v1.ico", import.meta.url), type: "image/x-icon" }],
 ]);
 
 function securityHeaders(response, requestId) {

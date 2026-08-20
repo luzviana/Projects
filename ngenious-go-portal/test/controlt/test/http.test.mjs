@@ -102,10 +102,24 @@ await test("serves the application with browser security headers", async () => {
   const res = await invoke(handler, { url: "/" });
   assert.equal(res.statusCode, 200);
   assert.match(res.body, /<!doctype html>/i);
+  assert.match(res.body, /Control administration/);
+  assert.doesNotMatch(res.body, /ControlT/);
   assert.match(res.headers.get("content-security-policy"), /frame-ancestors 'none'/);
   assert.equal(res.headers.get("x-frame-options"), "DENY");
   assert.equal(res.headers.get("cache-control"), "no-store");
   assert.ok(res.headers.get("x-request-id"));
+});
+
+await test("serves the packaged ngenious logo and robot favicon", async () => {
+  const { handler } = harness();
+  const logo = await invoke(handler, { url: "/assets/ngenious-logo.png" });
+  const favicon = await invoke(handler, { url: "/favicon.ico" });
+  assert.equal(logo.statusCode, 200);
+  assert.equal(logo.headers.get("content-type"), "image/png");
+  assert.ok(logo.body.length > 100);
+  assert.equal(favicon.statusCode, 200);
+  assert.equal(favicon.headers.get("content-type"), "image/x-icon");
+  assert.ok(favicon.body.length > 100);
 });
 
 await test("rejects an unauthenticated API request", async () => {
