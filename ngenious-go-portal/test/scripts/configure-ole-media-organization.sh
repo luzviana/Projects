@@ -284,15 +284,27 @@ else
 fi
 printf 'Control operational-organization permission is present.\n'
 
-configured_control_permission=$(kc get \
-  "clients/$admin_permissions_client_id/authz/resource-server/permission" \
-  -r "$REALM" -q name="$control_permission_name" -q exact=true)
-printf '%s' "$configured_control_permission" | jq -e \
+configured_control_scopes=$(kc get \
+  "clients/$admin_permissions_client_id/authz/resource-server/permission/scope/$control_permission_id/scopes" \
+  -r "$REALM")
+printf '%s' "$configured_control_scopes" | jq -e \
+  'map(.name) | (index("view") != null) and (index("manage") != null)' \
+  >/dev/null
+
+configured_control_resources=$(kc get \
+  "clients/$admin_permissions_client_id/authz/resource-server/permission/scope/$control_permission_id/resources" \
+  -r "$REALM")
+printf '%s' "$configured_control_resources" | jq -e \
   --arg ole "$organization_id" --arg ngenious "$ngenious_organization_id" \
-  '.[0] | (.scopes | index("view") != null) and
-   (.scopes | index("manage") != null) and
-   (.resources | index($ole) != null) and
-   (.resources | index($ngenious) != null)' >/dev/null
+  'map(._id // .id) |
+   (index($ole) != null) and (index($ngenious) != null)' >/dev/null
+
+configured_control_policies=$(kc get \
+  "clients/$admin_permissions_client_id/authz/resource-server/permission/scope/$control_permission_id/associatedPolicies" \
+  -r "$REALM")
+printf '%s' "$configured_control_policies" | jq -e \
+  --arg policy "$control_policy_name" \
+  'map(.name) | index($policy) != null' >/dev/null
 printf 'Control operational-organization permission verified.\n'
 
 for membership_organization_id in "$organization_id" "$ngenious_organization_id"; do
