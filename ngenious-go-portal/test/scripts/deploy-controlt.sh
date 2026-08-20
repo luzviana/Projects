@@ -25,7 +25,6 @@ for required_key in \
   CONTROLT_SESSION_SECRET; do
   grep -q "^${required_key}=.." "$SECRETS_FILE"
 done
-! docker container inspect "$BACKUP_CONTAINER" >/dev/null 2>&1
 if [[ -e "$CURRENT_LINK" && ! -L "$CURRENT_LINK" ]]; then
   printf '%s must be a release symlink.\n' "$CURRENT_LINK" >&2
   exit 1
@@ -67,20 +66,27 @@ mv -Tf "$CURRENT_LINK.next" "$CURRENT_LINK"
 caddy_backup=$(mktemp /opt/go-portal/caddy/Caddyfile.pre-controlt.XXXXXX)
 cp -p "$CADDYFILE" "$caddy_backup"
 
-had_previous=false
-if docker container inspect "$CONTAINER" >/dev/null 2>&1; then
-  had_previous=true
-  docker stop "$CONTAINER" >/dev/null
-  docker rename "$CONTAINER" "$BACKUP_CONTAINER"
+if docker container inspect "$BACKUP_CONTAINER" >/dev/null 2>&1; then
+  archived_backup="${BACKUP_CONTAINER}-$(date -u +%Y%m%dT%H%M%SZ)"
+  docker rename "$BACKUP_CONTAINER" "$archived_backup"
+  printf 'Older rollback container preserved as %s.\n' "$archived_backup"
 fi
 
+had_previous=false
+previous_stopped=false
+previous_renamed=false
+new_container_attempted=false
 rollback() {
   status=$?
   trap - ERR
   set +e
-  docker rm -f "$CONTAINER" >/dev/null 2>&1
-  if [[ "$had_previous" == true ]]; then
+  if [[ "$new_container_attempted" == true ]]; then
+    docker rm -f "$CONTAINER" >/dev/null 2>&1
+  fi
+  if [[ "$previous_renamed" == true ]]; then
     docker rename "$BACKUP_CONTAINER" "$CONTAINER" >/dev/null 2>&1
+    docker start "$CONTAINER" >/dev/null 2>&1
+  elif [[ "$previous_stopped" == true ]]; then
     docker start "$CONTAINER" >/dev/null 2>&1
   fi
   if [[ -n "$previous_release" ]]; then
@@ -96,6 +102,15 @@ rollback() {
 }
 trap rollback ERR
 
+if docker container inspect "$CONTAINER" >/dev/null 2>&1; then
+  had_previous=true
+  docker stop "$CONTAINER" >/dev/null
+  previous_stopped=true
+  docker rename "$CONTAINER" "$BACKUP_CONTAINER"
+  previous_renamed=true
+fi
+
+new_container_attempted=true
 docker run -d \
   --name "$CONTAINER" \
   --restart unless-stopped \
