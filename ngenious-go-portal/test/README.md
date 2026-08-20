@@ -321,3 +321,24 @@ Its gateway redirects page requests to `id.ngenious.app`, returns authenticated
 users to their original Ole Media URL, and rejects unsigned monitoring-data
 requests with HTTP 401. Ole Media continues to own its application roles and
 customer permissions.
+
+After the `media-monitoring` client exists, run
+`scripts/configure-ole-media-organization.sh` on the identity instance through
+an approved Systems Manager session. It idempotently creates the `Ole Media`
+organization, creates the application's ordinary `access` role when missing,
+and records `media-monitoring` in the organization's
+`ngenious.allowedApplications` allowlist. This makes Ole Media visible to an
+ngenious administrator in Control administration. It also creates the
+`ngenious` organization and assigns the existing `cleber@ngenious.ai` internal
+administrator to both organizations. Multiple organization membership does not
+restrict the internal administrator role; customer administrators remain bound
+to exactly one organization. The script does not create users, send
+invitations, change the application client secret, or use AWS Secrets Manager.
+It uses a temporary local Keycloak recovery administrator, removes it before
+exit, and causes a brief Keycloak restart while it is created. The script also
+ensures that the restricted Control service has Keycloak's read-only
+`view-organizations` role. It does not grant `manage-organizations` or any other
+organization-configuration permission. The Keycloak client is displayed as
+`Streamer Monitor`. Control receives only that client's ordinary `access` role
+and token scope, allowing it to grant or remove Streamer access for team members
+without permission to configure the application client.

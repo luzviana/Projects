@@ -92,7 +92,7 @@ unset ADMIN_JSON ADMIN_USER ADMIN_PASSWORD
 
 client_payload=$(jq -cn --arg client_id "$CLIENT_ID" '{
   clientId:$client_id,
-  name:"Ole Media Monitoring",
+  name:"Streamer Monitor",
   description:"Ole Media direct application authentication",
   enabled:true,
   alwaysDisplayInConsole:true,

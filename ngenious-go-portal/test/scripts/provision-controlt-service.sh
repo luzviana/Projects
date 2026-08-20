@@ -133,6 +133,7 @@ required_roles=(
   view-users
   query-users
   query-organizations
+  view-organizations
   view-clients
   query-clients
 )
