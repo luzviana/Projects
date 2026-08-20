@@ -252,9 +252,9 @@ pilot account.
 
 ## Transition
 
-Until ControlT is deployed, `controlt.ngenious.app` still points to the native
-Keycloak administration console. The restricted service client and local
-credential path are ready, and the normal invitation workflow no longer uses
-AWS Secrets Manager or an offline bootstrap administrator. The native console
-remains transitional, not the approved customer experience. Deployment must
-switch the hostname only after the ControlT security and end-to-end tests pass.
+The restricted service client and local credential path are ready, and the
+normal invitation workflow no longer uses AWS Secrets Manager or an offline
+bootstrap administrator. Deployment switches `controlt.ngenious.app` from the
+native console to ControlT only after the automated security suite and local
+health check pass. Live invitation and direct-application sign-in remain the
+post-deployment pilot acceptance step.

@@ -62,10 +62,7 @@ id.ngenious.app {
 controlt.ngenious.app {
 	encode zstd gzip
 
-	@approvedAdminEntry path / /admin/master*
-	redir @approvedAdminEntry /admin/go-portal-test/console/ 302
-
-	reverse_proxy 127.0.0.1:8080
+	reverse_proxy 127.0.0.1:3100
 
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
