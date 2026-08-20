@@ -217,7 +217,8 @@ own user-record scopes. It does not grant realm-wide administration.
 For an ngenious internal operator who must create and manage identities across
 customers, run `scripts/grant-ngenious-user-admin.sh` with `USER_EMAIL`. It
 grants the `manage-users`, `view-users`, `query-users`, and
-`query-organizations` roles. It does not grant realm, client, application-role,
+`query-organizations` roles plus the Control application's `ngenious-admin`
+role. It does not grant realm, client, application-role management,
 identity-provider, authentication-flow, or event administration. Customer
 administrators must not receive this role set.
 
