@@ -52,6 +52,7 @@ cleanup() {
 trap cleanup EXIT
 
 test "$(docker inspect "$CONTROLT_CONTAINER" --format '{{.State.Running}}')" = true
+printf 'Verifying the private Control identity relay.\n'
 docker exec "$CONTROLT_CONTAINER" node -e \
   'const net=require("node:net");const socket=net.connect(2525,"127.0.0.1",()=>socket.end());socket.on("error",()=>process.exit(1));setTimeout(()=>process.exit(1),3000).unref()'
 
@@ -87,9 +88,14 @@ smtp_payload=$(jq -cn '{smtpServer: {
   starttls: "false",
   ssl: "false",
   from: "no-reply@ngenious.app",
-  fromDisplayName: "ngenious"
+  fromDisplayName: "ngenious",
+  username: null,
+  password: null,
+  replyTo: null,
+  replyToDisplayName: null
 }}')
 
+printf 'Applying the private Keycloak mail route.\n'
 if ! kc update "realms/$REALM" -b "$smtp_payload" >/dev/null; then
   kc update "realms/$REALM" -b "$(jq -cn --argjson smtp "$original_smtp" '{smtpServer:$smtp}')" >/dev/null 2>&1 || true
   exit 1
