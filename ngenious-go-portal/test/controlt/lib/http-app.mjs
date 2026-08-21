@@ -26,11 +26,35 @@ function json(response, status, body) {
   response.end(payload);
 }
 
-function redirect(response, location, cookies = []) {
-  response.statusCode = 302;
+function html(response, status, body) {
+  response.writeHead(status, { "content-type": "text/html; charset=utf-8", "content-length": Buffer.byteLength(body) });
+  response.end(body);
+}
+
+function css(response, body) {
+  response.writeHead(200, { "content-type": "text/css; charset=utf-8", "content-length": Buffer.byteLength(body) });
+  response.end(body);
+}
+
+function redirect(response, location, cookies = [], status = 302) {
+  response.statusCode = status;
   response.setHeader("location", location);
   if (cookies.length) response.setHeader("set-cookie", cookies);
   response.end();
+}
+
+async function readForm(request) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of request) {
+    size += chunk.length;
+    if (size > 4_096) throw new HttpError(413, "request_too_large", "The request is too large.");
+    chunks.push(chunk);
+  }
+  if (!(request.headers["content-type"] || "").toLowerCase().startsWith("application/x-www-form-urlencoded")) {
+    throw new HttpError(415, "form_required", "Submit the invitation confirmation form.");
+  }
+  return new URLSearchParams(Buffer.concat(chunks).toString("utf8"));
 }
 
 async function readJson(request) {
@@ -61,7 +85,7 @@ const part = (value) => {
   catch { throw new HttpError(400, "invalid_path", "The request path is invalid."); }
 };
 
-export function createRequestHandler({ config, sessions, oidc, service, logError = (record) => process.stderr.write(`${JSON.stringify(record)}\n`) }) {
+export function createRequestHandler({ config, sessions, oidc, service, invitations, invitationPage, invitationCss, logError = (record) => process.stderr.write(`${JSON.stringify(record)}\n`) }) {
   function authenticated(request) {
     const found = sessions.getSession(request.headers.cookie);
     if (!found) throw new HttpError(401, "authentication_required", "Sign in to continue.");
@@ -122,6 +146,25 @@ export function createRequestHandler({ config, sessions, oidc, service, logError
   async function route(request, response) {
     const url = new URL(request.url, config.publicOrigin);
     if (request.method === "GET" && url.pathname === "/healthz") return json(response, 200, { status: "ok" });
+    if (request.method === "GET" && url.pathname === "/invite/invitation.css") return css(response, invitationCss);
+    const invitationMatch = url.pathname.match(/^\/invite\/([A-Za-z0-9_-]{22})(\/continue)?$/);
+    if (invitationMatch && request.method === "GET" && !invitationMatch[2]) {
+      const invitation = await invitations.resolve(invitationMatch[1]);
+      return html(response, invitation ? 200 : 410, invitationPage({
+        code: invitationMatch[1],
+        confirmation: invitation ? invitations.confirmation(invitationMatch[1]) : "",
+        expired: !invitation,
+      }));
+    }
+    if (invitationMatch && request.method === "POST" && invitationMatch[2]) {
+      const form = await readForm(request);
+      if (!invitations.verifyConfirmation(invitationMatch[1], form.get("confirmation"))) {
+        throw new HttpError(403, "invitation_confirmation_failed", "The invitation confirmation is invalid.");
+      }
+      const invitation = await invitations.resolve(invitationMatch[1]);
+      if (!invitation) return html(response, 410, invitationPage({ code: invitationMatch[1], confirmation: "", expired: true }));
+      return redirect(response, invitation.actionUrl, [], 303);
+    }
     if (request.method === "GET" && (url.pathname === "/auth/login" || (url.pathname === "/" && !sessions.getSession(request.headers.cookie)))) {
       const { url: authorizationUrl, flow } = await oidc.createAuthorization();
       return redirect(response, authorizationUrl, [sessions.createOauthFlow(flow)]);

@@ -10,8 +10,8 @@
 - One 20 GiB encrypted `gp3` root volume
 - Keycloak 26.7.0 and PostgreSQL 17.6 on the same instance
 - AWS Systems Manager access; no inbound security-group rules
-- External DNS for `got.ngenious.app` and `id.ngenious.app`; Keycloak email
-  delivery through the existing Google Workspace SMTP relay, with no load
+- External DNS for `got.ngenious.app` and `id.ngenious.app`; identity email
+  delivery through Control's private invitation relay and Postmark, with no load
   balancer, NAT gateway, AWS monitoring, or automatic recovery
 
 The VPC is shared with Media Monitoring and has peering routes to private
@@ -134,35 +134,33 @@ branding. The login theme's checked-in `css/styles.css` is the exact base
 stylesheet from the pinned Keycloak 26.7.0 release and must be refreshed when
 the Keycloak image is upgraded.
 
-## Keycloak email delivery
+## Identity email delivery
 
-Keycloak owns invitation, verification, and password-reset behavior and sends
-the branded messages directly through standard SMTP. The shared-test PoC uses
-the existing `viana.ooo` Google Workspace SMTP relay; Amazon SES and Resend are
-not part of this configuration.
-
-In Google Workspace Admin, create an SMTP relay rule that accepts mail only
-from the identity server's fixed public IPv4 address, `18.215.111.250`, requires
-TLS, restricts senders to registered Workspace users, and permits delivery to
-external recipients. Store the provider-neutral Keycloak configuration in the
-version-controlled deployment script; it contains no SMTP credential. The
-effective configuration is:
+Keycloak continues to own invitation, verification, password setup, and reset
+actions. It generates the action and branded MIME message, then submits the
+message to Control on the private Docker network:
 
 ```json
 {
-  "host": "smtp-relay.gmail.com",
-  "port": 587,
+  "host": "controlt",
+  "port": 2525,
   "auth": false,
-  "from": "aws@viana.ooo",
-  "fromDisplayName": "ngenious",
-  "replyTo": "aws@viana.ooo"
+  "from": "no-reply@ngenious.app",
+  "fromDisplayName": "ngenious"
 }
 ```
 
-The running PoC already has this realm-level SMTP setting. It is not part of
-normal ControlT operation. Future realm-level changes require a separately
-approved maintenance session; the restricted ControlT service identity cannot
-change SMTP or realm configuration.
+Control replaces the raw Keycloak action URL with a short opaque
+`https://id.ngenious.app/invite/...` URL and sends the rewritten message through
+Postmark. The raw token is encrypted locally until expiry and is never sent to
+Postmark. The confirmation page requires a deliberate POST before redirecting
+to Keycloak, preventing automated email scanners from consuming the action.
+
+The Postmark server token and invitation encryption key are stored only in the
+root-owned `controlt.env`. Run `scripts/activate-controlt-invitation-relay.sh`
+once after deploying Control to apply the internal Keycloak SMTP route. Normal
+invitations and resends do not restart Keycloak. Amazon SES, Resend, and Google
+Workspace SMTP are not part of this path.
 
 ## Organization user invitation
 
@@ -193,8 +191,8 @@ Run `scripts/invite-organization-user.sh` as root on the identity instance with
 1. refuses to change or relink an identity that already exists;
 2. creates an unverified identity without a password;
 3. adds it to exactly the named organization;
-4. sends one branded, expiring action link for email verification and password
-   creation; and
+4. sends one branded, opaque invitation link for email verification and
+   password creation; and
 5. removes the newly created identity if delivery fails.
 
 The script authenticates only as `controlt-service` through the protected local
@@ -204,8 +202,8 @@ administrator, stops Keycloak, or restarts Keycloak.
 The script does not grant application access or application roles. Its default
 link lifetime is 12 hours and can be changed with
 `ACTION_LIFESPAN_SECONDS`. `DELETE_AFTER_SEND=true` is reserved for synthetic
-delivery tests. The Workspace relay can deliver to external recipients without
-provider-specific recipient verification.
+delivery tests. Postmark can deliver to external recipients without
+per-recipient validation.
 For an explicitly approved onboarding retest, `REPLACE_EXISTING=true` removes
 only the matching identity before recreating it and sending a fresh invitation.
 The default remains refusal to alter an existing identity.

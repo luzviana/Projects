@@ -40,6 +40,9 @@ id.ngenious.app {
 	@root path /
 	redir @root /realms/go-portal-test/account/ 302
 
+	@invitations path /invite/*
+	reverse_proxy @invitations 127.0.0.1:3100
+
 	reverse_proxy 127.0.0.1:8080
 
 	header {

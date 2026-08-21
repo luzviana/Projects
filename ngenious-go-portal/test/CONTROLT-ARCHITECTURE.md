@@ -23,8 +23,10 @@ The target operation is:
 > Create user and send invitation
 
 That single operation creates or validates the identity, assigns the authorized
-organization and applications, and asks Keycloak to send an expiring action
-link containing `VERIFY_EMAIL` and `UPDATE_PASSWORD`.
+organization and applications, and asks Keycloak to create the expiring
+`VERIFY_EMAIL` and `UPDATE_PASSWORD` action. The recipient receives an opaque
+ngenious invitation URL; the raw Keycloak action URL is never placed in the
+outbound email.
 
 ## System boundary
 
@@ -43,8 +45,9 @@ ControlT is an administration facade over supported Keycloak APIs. It owns:
 - the customer-administrator user experience;
 - authorization checks that bind a customer administrator to one organization;
 - orchestration of user creation, membership, application access, and email;
-- safe duplicate-user and resend behavior; and
-- minimal invitation and administrator audit metadata.
+- safe duplicate-user and resend behavior;
+- encrypted, expiring invitation indirection; and
+- minimal administrator audit metadata.
 
 ControlT must never store passwords, validate passwords, issue identity tokens,
 implement login, or reproduce Keycloak authentication flows.
@@ -58,11 +61,12 @@ browser never receives the Keycloak administration credential. The backend uses
 a dedicated Keycloak confidential service client with only the permissions
 required by the approved operations.
 
-The PoC uses no separate ControlT database. Keycloak remains authoritative for
+The PoC uses no separate ControlT database service. Keycloak remains authoritative for
 users, organization membership, application roles, enabled state, and email
-verification. Small audit fields such as invitation time and inviter may be
-stored as namespaced Keycloak user attributes until a dedicated audit store is
-justified.
+verification. Control keeps only an encrypted action URL and expiry in a
+root-protected local data directory, addressed by the hash of a random opaque
+code. Expired records are removed automatically. The invitation URL contains
+no Keycloak token, user identifier, email address, or organization identifier.
 
 ### Keycloak
 
@@ -71,11 +75,15 @@ calls Keycloak's administration API from the server and uses the
 `execute-actions-email` endpoint to send the setup link. Merely saving required
 actions on a user is not treated as sending an invitation.
 
-### Google Workspace SMTP relay
+### Control invitation relay and Postmark
 
-Keycloak sends branded messages through the existing TLS-protected Google
-Workspace SMTP relay. ControlT does not connect to SMTP and does not construct
-verification or password links.
+Keycloak generates the standard branded MIME message and submits it to
+Control's private SMTP listener on the isolated container network. Control
+extracts and validates the Keycloak action URL, stores it encrypted with a
+12-hour expiry, replaces it in both text and HTML bodies with
+`https://id.ngenious.app/invite/<opaque-code>`, and forwards the rewritten
+message through the Postmark HTTPS API. Control never generates the identity
+action and Postmark never receives the raw Keycloak token.
 
 ### Caddy
 
@@ -84,7 +92,8 @@ AWS application load balancer for this PoC. It obtains and renews TLS
 certificates, applies public security headers, writes access logs, and routes:
 
 - `got.ngenious.app` to the protected test application;
-- `id.ngenious.app` to Keycloak login and self-service; and
+- `id.ngenious.app/invite/*` to Control's invitation confirmation page;
+- all other `id.ngenious.app` paths to Keycloak login and self-service; and
 - `controlt.ngenious.app` to the ControlT application.
 
 Caddy does not authenticate users or store identity data. Keycloak port 8080
@@ -166,8 +175,10 @@ specific organization resource to the permission.
 7. Assign only the selected, permitted application access.
 8. Call `execute-actions-email` with `VERIFY_EMAIL` and `UPDATE_PASSWORD` and a
    12-hour lifespan.
-9. Record the inviter and invitation time without storing the action link.
-10. Return a clear success response identifying the recipient and link expiry.
+9. Keycloak submits its generated message to the internal Control relay.
+10. Control encrypts the validated action URL, substitutes the opaque ngenious
+    invitation URL, and sends the rewritten message through Postmark.
+11. Return a clear success response identifying the recipient and link expiry.
 
 If Keycloak rejects the email request synchronously, ControlT removes access
 created by that incomplete operation or records a recoverable pending state.
@@ -212,8 +223,10 @@ for password, session, and other self-service identity management.
 The Add user form contains only first name, last name, email, and permitted
 applications. Its primary action is **Create user and send invitation**.
 
-The Keycloak invitation landing page uses the short heading **Set up your
-account** and one **Continue** action. Expired or previously used invitation
+The Control invitation landing page uses the short heading **Finish setting up
+your account** and one **Continue setup** action. It does not redirect on GET,
+so email security scanners cannot consume the Keycloak action. Only a confirmed
+POST reveals the action through an HTTP 303 redirect. Expired or used invitation
 links show a concise explanation directing the person to request a new
 invitation; they do not show Keycloak's generic **Back to application** link.
 
@@ -225,8 +238,8 @@ current PoC.
 ## Local credential policy
 
 The approved PoC target has no AWS Secrets Manager dependency. The ControlT
-service-client credential and server session secret are generated on the
-identity host and stored only in:
+service-client credential, server session secret, invitation encryption key,
+and Postmark server token are stored only in:
 
 `/opt/go-portal/secrets/controlt.env`
 
@@ -273,7 +286,10 @@ The target is accepted only when tests demonstrate that:
 10. customer administrators cannot reach the native Keycloak administration
     console; and
 11. all normal administration operations complete without a Keycloak restart
-    or public 502 response.
+    or public 502 response;
+12. outbound email contains only the opaque ngenious invitation URL and never
+    the raw Keycloak action token; and
+13. a GET request from a mail scanner cannot activate or consume an invitation.
 
 ## Automated verification
 
@@ -282,7 +298,9 @@ create a live identity or send an email. It verifies the user lifecycle and
 rollback rules, administrator and organization boundaries, approved-application
 enforcement, signed sessions, CSRF protection, request limits, safe error
 responses, security headers, logout invalidation, and cryptographic OIDC token
-validation.
+validation. It also verifies encrypted invitation storage, expiry, MIME parsing,
+action-link replacement, Postmark submission, and the scanner-safe GET/POST
+confirmation boundary.
 
 Passing the automated suite authorizes deployment testing; it does not by
 itself satisfy the live-email and direct-application sign-in acceptance

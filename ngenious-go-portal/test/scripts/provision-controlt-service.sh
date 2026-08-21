@@ -255,9 +255,21 @@ if [[ -f "$CONTROLT_ENV" ]]; then
   CONTROLT_SESSION_SECRET=$(sed -n \
     's/^CONTROLT_SESSION_SECRET=\([[:alnum:]]\+\)$/\1/p' "$CONTROLT_ENV" \
     | head -n 1)
+  EXISTING_INVITATION_SECRET=$(sed -n \
+    's/^CONTROLT_INVITATION_SECRET=\([[:xdigit:]]\{64\}\)$/\1/p' "$CONTROLT_ENV" \
+    | head -n 1)
+  EXISTING_POSTMARK_SERVER_TOKEN=$(sed -n \
+    's/^POSTMARK_SERVER_TOKEN=\([[:alnum:]-]\+\)$/\1/p' "$CONTROLT_ENV" \
+    | head -n 1)
 fi
 if [[ -z "${CONTROLT_SESSION_SECRET:-}" ]]; then
   CONTROLT_SESSION_SECRET=$(openssl rand -hex 32)
+fi
+CONTROLT_INVITATION_SECRET=${EXISTING_INVITATION_SECRET:-$(openssl rand -hex 32)}
+POSTMARK_SERVER_TOKEN=${POSTMARK_SERVER_TOKEN:-${EXISTING_POSTMARK_SERVER_TOKEN:-}}
+if [[ -z "$POSTMARK_SERVER_TOKEN" ]]; then
+  printf 'Set POSTMARK_SERVER_TOKEN for the existing Postmark server before provisioning Control.\n' >&2
+  exit 1
 fi
 
 umask 077
@@ -271,6 +283,9 @@ env_temp=$(mktemp "$SECRETS_DIR/controlt.env.XXXXXX")
   printf 'CONTROLT_OIDC_CLIENT_ID=%s\n' "$OIDC_CLIENT_ID"
   printf 'CONTROLT_OIDC_CLIENT_SECRET=%s\n' "$OIDC_CLIENT_SECRET"
   printf 'CONTROLT_SESSION_SECRET=%s\n' "$CONTROLT_SESSION_SECRET"
+  printf 'CONTROLT_INVITATION_SECRET=%s\n' "$CONTROLT_INVITATION_SECRET"
+  printf 'POSTMARK_SERVER_TOKEN=%s\n' "$POSTMARK_SERVER_TOKEN"
+  printf 'POSTMARK_MESSAGE_STREAM=outbound\n'
 } >"$env_temp"
 chown root:root "$env_temp"
 chmod 0600 "$env_temp"

@@ -7,6 +7,7 @@ STAGED_CADDYFILE=$STAGED_ROOT/Caddyfile
 RELEASES_ROOT=/opt/go-portal/controlt-releases
 CURRENT_LINK=/opt/go-portal/controlt
 SECRETS_FILE=/opt/go-portal/secrets/controlt.env
+DATA_DIR=/opt/go-portal/controlt-data
 CADDYFILE=/opt/go-portal/caddy/Caddyfile
 CONTAINER=controlt
 BACKUP_CONTAINER=controlt-pre-deploy
@@ -22,7 +23,8 @@ for required_key in \
   KEYCLOAK_INTERNAL_URL KEYCLOAK_ISSUER KEYCLOAK_REALM \
   KEYCLOAK_ADMIN_CLIENT_ID KEYCLOAK_ADMIN_CLIENT_SECRET \
   CONTROLT_OIDC_CLIENT_ID CONTROLT_OIDC_CLIENT_SECRET \
-  CONTROLT_SESSION_SECRET; do
+  CONTROLT_SESSION_SECRET CONTROLT_INVITATION_SECRET \
+  POSTMARK_SERVER_TOKEN; do
   grep -q "^${required_key}=.." "$SECRETS_FILE"
 done
 if [[ -e "$CURRENT_LINK" && ! -L "$CURRENT_LINK" ]]; then
@@ -56,6 +58,7 @@ docker run --rm \
 
 release="$RELEASES_ROOT/$(date -u +%Y%m%dT%H%M%SZ)"
 install -d -o root -g root -m 0750 "$RELEASES_ROOT" "$release"
+install -d -o 1000 -g 1000 -m 0700 "$DATA_DIR"
 cp -a "$STAGED_APP/." "$release/"
 chown -R root:root "$release"
 find "$release" -type d -exec chmod 0755 {} +
@@ -126,7 +129,9 @@ docker run -d \
   --env-file "$SECRETS_FILE" \
   --env NODE_ENV=production \
   --env PORT=3100 \
+  --env CONTROLT_INVITATION_DIRECTORY=/var/lib/controlt/invitations \
   --mount type=bind,src="$release",dst=/app,readonly \
+  --mount type=bind,src="$DATA_DIR",dst=/var/lib/controlt \
   --workdir /app \
   --log-driver journald \
   "$node_image" node server.mjs >/dev/null
@@ -164,10 +169,13 @@ api_status=$(curl --max-time 10 -sS -o /dev/null -w '%{http_code}' \
   https://controlt.ngenious.app/api/organizations)
 login_location=$(curl --max-time 10 -sS -o /dev/null -w '%{redirect_url}' \
   https://controlt.ngenious.app/auth/login)
+invitation_status=$(curl --max-time 10 -sS -o /dev/null -w '%{http_code}' \
+  https://id.ngenious.app/invite/AAAAAAAAAAAAAAAAAAAAAA)
 [[ "$root_status" == 302 ]]
 [[ "$root_location" == https://id.ngenious.app/realms/go-portal-test/* ]]
 [[ "$api_status" == 401 ]]
 [[ "$login_location" == https://id.ngenious.app/realms/go-portal-test/* ]]
+[[ "$invitation_status" == 410 ]]
 
 trap - ERR
 rm -f -- "$caddy_backup"
@@ -176,3 +184,4 @@ if [[ "$had_previous" == true ]]; then
 fi
 printf 'ControlT deployed from %s without restarting Keycloak.\n' "$release"
 printf 'Automatic authentication redirect and protected API boundary verified.\n'
+printf 'Scanner-safe invitation route verified at id.ngenious.app.\n'

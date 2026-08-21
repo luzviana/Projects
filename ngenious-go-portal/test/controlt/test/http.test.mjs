@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createRequestHandler } from "../lib/http-app.mjs";
 import { KeycloakApiError } from "../lib/keycloak.mjs";
 import { createSessionStore } from "../lib/sessions.mjs";
+import { invitationCss, invitationPage } from "../lib/invitations.mjs";
 
 let passed = 0;
 
@@ -87,14 +88,24 @@ function harness() {
     async logoutUrl() { return "https://id.example.test/logout"; },
   };
   const errors = [];
+  const invitationCode = "A".repeat(22);
+  const invitationActionUrl = "https://id.ngenious.app/realms/go-portal-test/login-actions/action-token?key=private-keycloak-token";
+  const invitations = {
+    async resolve(code) { return code === invitationCode ? { actionUrl: invitationActionUrl, expiresAt: Date.now() + 60_000 } : null; },
+    confirmation(code) { return `confirmation-${code}`; },
+    verifyConfirmation(code, supplied) { return code === invitationCode && supplied === `confirmation-${code}`; },
+  };
   const handler = createRequestHandler({
     config: { publicOrigin: "https://controlt.ngenious.app", postLoginPath: "/" },
     sessions,
     oidc,
     service,
+    invitations,
+    invitationPage,
+    invitationCss,
     logError: (record) => errors.push(record),
   });
-  return { handler, sessions, service, oidc, calls, errors, authHeaders, created };
+  return { handler, sessions, service, oidc, calls, errors, authHeaders, created, invitationCode, invitationActionUrl };
 }
 
 async function invoke(handler, options) {
@@ -147,6 +158,53 @@ await test("serves the packaged ngenious logo and robot favicon", async () => {
   assert.equal(favicon.statusCode, 200);
   assert.equal(favicon.headers.get("content-type"), "image/x-icon");
   assert.ok(favicon.body.length > 100);
+});
+
+await test("serves a scanner-safe invitation page without exposing the Keycloak token", async () => {
+  const { handler, invitationCode, invitationActionUrl } = harness();
+  const res = await invoke(handler, { url: `/invite/${invitationCode}` });
+  assert.equal(res.statusCode, 200);
+  assert.match(res.body, /Continue setup/);
+  assert.match(res.body, new RegExp(`/invite/${invitationCode}/continue`));
+  assert.doesNotMatch(res.body, /private-keycloak-token/);
+  assert.doesNotMatch(res.body, new RegExp(invitationActionUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.equal(res.headers.get("cache-control"), "no-store");
+});
+
+await test("serves invitation styling without allowing inline styles", async () => {
+  const { handler } = harness();
+  const res = await invoke(handler, { url: "/invite/invitation.css" });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.headers.get("content-type"), "text/css; charset=utf-8");
+  assert.match(res.body, /\.card/);
+  assert.match(res.headers.get("content-security-policy"), /style-src 'self'/);
+});
+
+await test("reveals the Keycloak action only after a valid invitation confirmation POST", async () => {
+  const { handler, invitationCode, invitationActionUrl } = harness();
+  const res = await invoke(handler, {
+    method: "POST",
+    url: `/invite/${invitationCode}/continue`,
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: `confirmation=${encodeURIComponent(`confirmation-${invitationCode}`)}`,
+  });
+  assert.equal(res.statusCode, 303);
+  assert.equal(res.headers.get("location"), invitationActionUrl);
+});
+
+await test("rejects invalid and expired invitation capabilities", async () => {
+  const { handler, invitationCode } = harness();
+  const invalid = await invoke(handler, { url: `/invite/${"B".repeat(22)}` });
+  assert.equal(invalid.statusCode, 410);
+  assert.match(invalid.body, /invalid or has expired/);
+  const forged = await invoke(handler, {
+    method: "POST",
+    url: `/invite/${invitationCode}/continue`,
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: "confirmation=forged",
+  });
+  assert.equal(forged.statusCode, 403);
+  assert.equal(forged.json.error, "invitation_confirmation_failed");
 });
 
 await test("rejects an unauthenticated API request", async () => {

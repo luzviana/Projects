@@ -33,6 +33,11 @@ organization, so organization controls are not shown to them.
   `ngenious.allowedApplications` attribute;
 - create identities without passwords and ask Keycloak to send the branded
   `VERIFY_EMAIL` + `UPDATE_PASSWORD` action email;
+- receive that Keycloak-generated message on a private container-network SMTP
+  listener, replace the raw action URL with an opaque ngenious invitation URL,
+  and deliver the rewritten message through Postmark;
+- keep the original action URL encrypted at rest until its 12-hour expiry and
+  reveal it only after the recipient confirms on the invitation page;
 - automatically send a fresh setup email when an existing pending identity is
   added, safely resend pending invitations, enable or disable members, and
   update approved application access;
@@ -40,8 +45,10 @@ organization, so organization controls are not shown to them.
   explicit organization-impact confirmation in the interface; and
 - write structured audit events without credentials or action links.
 
-It does not connect to SMTP, build password links, store passwords, access the
+It does not generate Keycloak action tokens, store passwords, access the
 Keycloak database, or expose the Keycloak service credential to the browser.
+Its SMTP listener is reachable only from the private Docker network and accepts
+only Keycloak-generated identity mail for forwarding.
 
 ## Configuration
 
@@ -56,10 +63,15 @@ required values are:
 - `CONTROLT_OIDC_CLIENT_ID`
 - `CONTROLT_OIDC_CLIENT_SECRET`
 - `CONTROLT_SESSION_SECRET`
+- `CONTROLT_INVITATION_SECRET`
+- `POSTMARK_SERVER_TOKEN`
 
 Optional settings include `PORT`, `CONTROLT_PUBLIC_ORIGIN`,
 `CONTROLT_SESSION_TTL_SECONDS`, `CONTROLT_INVITATION_LIFESPAN_SECONDS`, and
-`CONTROLT_APPLICATION_ROLE`. The default application access role is `access`.
+`CONTROLT_APPLICATION_ROLE`. Invitation-specific options include
+`CONTROLT_INVITATION_PUBLIC_ORIGIN`, `CONTROLT_INVITATION_DIRECTORY`,
+`CONTROLT_IDENTITY_RELAY_PORT`, and `POSTMARK_MESSAGE_STREAM`. The default
+application access role is `access`.
 
 ## API
 
@@ -67,6 +79,8 @@ Optional settings include `PORT`, `CONTROLT_PUBLIC_ORIGIN`,
 | --- | --- | --- |
 | `GET` | `/` | Open Control when signed in, or start Keycloak sign-in automatically |
 | `GET` | `/healthz` | Process health |
+| `GET` | `/invite/:code` | Scanner-safe invitation confirmation page |
+| `POST` | `/invite/:code/continue` | Continue to the expiring Keycloak identity action |
 | `GET` | `/auth/login` | Start Keycloak sign-in |
 | `GET` | `/auth/callback` | Complete Keycloak sign-in |
 | `POST` | `/auth/logout` | End the local and Keycloak administrator sessions |
@@ -94,8 +108,8 @@ npm run check
 ```
 
 The checked-in tests use an in-memory Keycloak substitute and never create
-users or send email. The suite currently covers 52 workflow, authorization,
-request-security, session, and identity-token checks, including:
+users or send email. The suite currently covers 60 workflow, invitation-relay,
+authorization, request-security, session, and identity-token checks, including:
 
 - organization isolation and administrator-role enforcement;
 - consolidated multi-organization membership and correct Keycloak member API
@@ -104,6 +118,8 @@ request-security, session, and identity-token checks, including:
   enable/disable, administrator-only deletion, and application-access behavior;
 - authentication, CSRF, request parsing and size limits, logout, safe errors,
   and browser security headers; and
+- encrypted expiring invitation storage, MIME parsing, raw-action replacement,
+  scanner-safe confirmation, and Postmark request generation; and
 - signed OIDC token verification for signature, issuer, audience, expiry,
   nonce, subject, algorithm, and malformed-token cases.
 
