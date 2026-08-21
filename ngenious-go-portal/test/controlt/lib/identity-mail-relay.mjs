@@ -68,10 +68,16 @@ function actionLinks(message) {
   return [...new Set([...message.textBody.matchAll(ACTION_URL), ...normalizedHtml.matchAll(ACTION_URL)].map((match) => match[0]))];
 }
 
-function replaceLink(value, actionUrl, shortUrl) {
-  return value
-    .replaceAll(actionUrl, shortUrl)
-    .replaceAll(actionUrl.replaceAll("&", "&amp;").replaceAll("=", "&#61;"), shortUrl);
+function plainIdentityMessage(shortUrl) {
+  return [
+    "This is an account setup message from ngenious.",
+    "",
+    "Open the ngenious identity service to continue:",
+    shortUrl,
+    "",
+    "This secure link expires in 12 hours.",
+    "If you did not expect this message, no action is required.",
+  ].join("\n");
 }
 
 export class IdentityMailRelay {
@@ -90,8 +96,11 @@ export class IdentityMailRelay {
     if (links.length > 1) throw new Error("The identity email contains multiple action URLs");
     if (links.length === 1) {
       const invitation = await this.invitations.create(links[0]);
-      message.textBody = replaceLink(message.textBody, links[0], invitation.url);
-      message.htmlBody = replaceLink(message.htmlBody, links[0], invitation.url);
+      // A deliberately small, plain-text message is less likely to be held by
+      // downstream corporate filters than Keycloak's multipart HTML template.
+      // The raw identity action remains encrypted behind the invitation gateway.
+      message.textBody = plainIdentityMessage(invitation.url);
+      message.htmlBody = "";
     }
     const response = await this.fetch("https://api.postmarkapp.com/email", {
       method: "POST",

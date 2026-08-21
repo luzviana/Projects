@@ -77,7 +77,7 @@ test("the identity email parser decodes Keycloak multipart content", () => {
   assert.match(parsed.htmlBody, /key&#61;secret\.keycloak\.jwt/);
 });
 
-test("the relay replaces the raw action URL and forwards only the short ngenious link", async () => {
+test("the relay replaces the raw action URL with a plain-text short ngenious invitation", async () => {
   const fixture = await temporaryStore();
   const requests = [];
   try {
@@ -98,7 +98,9 @@ test("the relay replaces the raw action URL and forwards only the short ngenious
     const body = requests[0][1];
     assert.doesNotMatch(`${body.TextBody}${body.HtmlBody}`, /secret\.keycloak\.jwt/);
     assert.match(body.TextBody, /https:\/\/id\.ngenious\.app\/invite\/[A-Za-z0-9_-]{22}/);
-    assert.match(body.HtmlBody, /https:\/\/id\.ngenious\.app\/invite\/[A-Za-z0-9_-]{22}/);
+    assert.match(body.TextBody, /This is an account setup message from ngenious/);
+    assert.match(body.TextBody, /expires in 12 hours/);
+    assert.equal(body.HtmlBody, undefined);
     assert.equal(body.ReplyTo, undefined);
   } finally {
     await rm(fixture.directory, { recursive: true, force: true });
