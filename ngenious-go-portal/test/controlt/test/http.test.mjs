@@ -125,6 +125,7 @@ await test("serves the application to an authenticated administrator", async () 
   assert.match(res.body, /Control administration/);
   assert.match(res.body, />Team</);
   assert.match(res.body, /Add team member/);
+  assert.match(res.body, /Delete account/);
   assert.match(res.body, /Remove from platform/);
   assert.match(res.body, /Manage my account/);
   assert.match(res.body, /https:\/\/id\.ngenious\.app\/realms\/go-portal-test\/account\//);

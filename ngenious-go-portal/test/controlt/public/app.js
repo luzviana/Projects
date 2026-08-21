@@ -8,7 +8,8 @@ const elements = Object.fromEntries([
   "add-user-dialog", "add-user-form", "add-organization-fieldset", "add-organization-options",
   "add-application-options", "add-user-error", "create-user-button", "access-dialog", "access-form",
   "access-user", "edit-organization-fieldset", "edit-organization-options", "edit-application-options",
-  "access-error", "save-access-button", "delete-user-dialog", "delete-user-form", "delete-user-name",
+  "access-error", "save-access-button", "manage-delete-section", "manage-delete-button",
+  "delete-user-dialog", "delete-user-form", "delete-user-name",
   "delete-user-organizations", "delete-user-error", "confirm-delete-user-button", "toast",
 ].map((id) => [id, byId(id)]));
 
@@ -113,7 +114,6 @@ function renderMembers() {
     if (member.status === "Pending") actions.append(actionButton("Resend invitation", "secondary", (event) => resendInvitation(member, event.currentTarget)));
     actions.append(actionButton(state.mode === "internal" ? "Manage" : "Manage access", "secondary", () => openAccess(member)));
     const enable = member.status === "Disabled"; actions.append(actionButton(enable ? "Enable" : "Disable", enable ? "secondary" : "danger", () => changeEnabled(member, enable)));
-    if (state.mode === "internal" && member.id !== state.session.user.sub) actions.append(actionButton("Remove from platform", "danger", () => openDelete(member)));
     row.append(person);
     if (state.mode === "internal") row.append(tags(member.organizationIds, orgNames, "organization"));
     row.append(status, tags(member.applications, appNames, "application"), actions);
@@ -161,9 +161,17 @@ function openAddUser() {
 function openAccess(member) {
   state.editingMember = member; elements["access-error"].hidden = true;
   elements["access-user"].textContent = `Manage organizations and applications for ${`${member.firstName} ${member.lastName}`.trim() || member.email}.`;
+  elements["manage-delete-section"].hidden = state.mode !== "internal" || member.id === state.session.user.sub;
   prepareOrganizationOptions(elements["edit-organization-options"], member.organizationIds);
   syncApplicationOptions(elements["edit-organization-options"], elements["edit-application-options"], member.applications);
   elements["access-dialog"].showModal();
+}
+
+function openManagedDelete() {
+  const member = state.editingMember;
+  if (!member) return;
+  elements["access-dialog"].close();
+  openDelete(member);
 }
 
 function openDelete(member) {
@@ -233,6 +241,7 @@ elements["member-search"].addEventListener("input", renderMembers);
 elements["add-user-button"].addEventListener("click", openAddUser);
 elements["add-user-form"].addEventListener("submit", submitAddUser);
 elements["access-form"].addEventListener("submit", submitAccess);
+elements["manage-delete-button"].addEventListener("click", openManagedDelete);
 elements["delete-user-form"].addEventListener("submit", submitDeleteUser);
 elements["add-organization-options"].addEventListener("change", () => syncApplicationOptions(elements["add-organization-options"], elements["add-application-options"], selected(elements["add-application-options"], "applications")));
 elements["edit-organization-options"].addEventListener("change", () => syncApplicationOptions(elements["edit-organization-options"], elements["edit-application-options"], selected(elements["edit-application-options"], "applications")));

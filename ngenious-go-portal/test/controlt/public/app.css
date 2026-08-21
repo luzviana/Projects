@@ -273,6 +273,11 @@ dialog form { display: flex; flex-direction: column; gap: 1.15rem; padding: clam
 .danger-text { color: var(--danger); }
 .deletion-warning { padding: 1rem; border: 1px solid #f1c1bc; border-radius: 0.6rem; color: var(--danger); background: var(--danger-pale); }
 .deletion-warning p { margin: 0.4rem 0 0; color: #7a271f; line-height: 1.5; }
+.manage-delete { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem; border: 1px solid #f1c1bc; border-radius: 0.6rem; background: var(--danger-pale); }
+.manage-delete[hidden] { display: none; }
+.manage-delete strong { color: var(--danger); }
+.manage-delete p { margin: 0.3rem 0 0; color: #7a271f; font-size: 0.84rem; line-height: 1.45; }
+.manage-delete .button { flex: 0 0 auto; }
 .icon-button { width: 2.25rem; height: 2.25rem; padding: 0; border: 0; border-radius: 50%; color: var(--ink-soft); font-size: 1.75rem; line-height: 1; background: transparent; }
 .icon-button:hover { background: var(--canvas); }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
@@ -317,6 +322,8 @@ legend { margin-bottom: 0.25rem; }
   .form-grid { grid-template-columns: 1fr; }
   .dialog-actions { flex-direction: column-reverse; }
   .dialog-actions .button { width: 100%; }
+  .manage-delete { align-items: stretch; flex-direction: column; }
+  .manage-delete .button { width: 100%; }
   .member-row { padding: 1rem; }
 }
 

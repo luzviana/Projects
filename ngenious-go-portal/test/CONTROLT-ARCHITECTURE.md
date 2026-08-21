@@ -202,8 +202,9 @@ The customer-administrator page contains:
 
 The internal-administrator version lists each person once and adds organization
 membership controls to the add and manage dialogs. It also provides permanent
-**Remove from platform** with a confirmation that lists every affected organization
-and explains that the Keycloak identity and all access will be deleted.
+**Delete account** inside the Manage dialog rather than in the Team action column.
+It opens a **Remove from platform** confirmation that lists every affected
+organization and explains that the Keycloak identity and all access will be deleted.
 Customer administrators cannot permanently delete identities. The account menu
 opened from the user's initials links to the branded Keycloak account console
 for password, session, and other self-service identity management.
