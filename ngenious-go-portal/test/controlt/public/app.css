@@ -222,15 +222,16 @@ input:focus, select:focus { border-color: var(--cyan-dark); box-shadow: 0 0 0 3p
 
 .member-row {
   display: grid;
-  grid-template-columns: minmax(13rem, 1.4fr) minmax(9rem, 0.9fr) minmax(7rem, 0.6fr) minmax(10rem, 1fr) minmax(13rem, auto);
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr) minmax(0, 0.65fr) minmax(0, 0.9fr) minmax(0, 2.3fr);
   align-items: center;
   gap: 1rem;
   min-height: 5.3rem;
   padding: 1rem 1.25rem;
 }
-.member-row.customer { grid-template-columns: minmax(13rem, 1.5fr) minmax(7rem, 0.6fr) minmax(10rem, 1fr) minmax(13rem, auto); }
+.member-row.customer { grid-template-columns: minmax(0, 1.8fr) minmax(0, 0.7fr) minmax(0, 1fr) minmax(0, 2.1fr); }
 .member-row + .member-row { border-top: 1px solid var(--line); }
 .member-row.header { min-height: auto; padding-block: 0.72rem; color: var(--ink-soft); font-size: 0.75rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; background: #f8fafb; }
+.member-row.header span:last-child { text-align: right; }
 .person { min-width: 0; }
 .person strong, .person span { display: block; overflow-wrap: anywhere; }
 .person span { margin-top: 0.22rem; color: var(--ink-soft); font-size: 0.86rem; }
