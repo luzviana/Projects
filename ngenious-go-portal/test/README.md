@@ -162,6 +162,13 @@ once after deploying Control to apply the internal Keycloak SMTP route. Normal
 invitations and resends do not restart Keycloak. Amazon SES, Resend, and Google
 Workspace SMTP are not part of this path.
 
+For the existing PoC, run `scripts/migrate-controlt-invitation-relay.sh` once.
+It copies the existing Postmark credential from Keycloak directly into the
+protected Control environment without printing it, generates the local
+invitation encryption key, runs the guarded Control deployment, changes the
+realm to the private relay, and removes its temporary maintenance identity.
+It retains the prior protected environment file for rollback review.
+
 ## Organization user invitation
 
 This command-line workflow is transitional. ControlT will perform the same
