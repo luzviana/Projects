@@ -298,8 +298,8 @@ export class ControlTService {
     if (userId === session.sub) throw new HttpError(409, "self_delete_forbidden", "You cannot delete your own administrator account.");
     const { user, memberships } = await this.teamMember(session, userId);
     await this.keycloak.deleteUser(userId);
-    audit({ outcome: "success", operation: "delete_team_member", actor: session.sub, target: userId, organizations: memberships.map(({ id }) => id) });
-    return { id: userId, email: user.email || user.username, deleted: true };
+    audit({ outcome: "success", operation: "remove_platform_account", actor: session.sub, target: userId, organizations: memberships.map(({ id }) => id) });
+    return { id: userId, email: user.email || user.username, deleted: true, removedFromPlatform: true };
   }
 
   validateApplications(requested, applications) {

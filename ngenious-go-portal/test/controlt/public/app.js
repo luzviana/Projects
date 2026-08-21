@@ -113,7 +113,7 @@ function renderMembers() {
     if (member.status === "Pending") actions.append(actionButton("Resend invitation", "secondary", (event) => resendInvitation(member, event.currentTarget)));
     actions.append(actionButton(state.mode === "internal" ? "Manage" : "Manage access", "secondary", () => openAccess(member)));
     const enable = member.status === "Disabled"; actions.append(actionButton(enable ? "Enable" : "Disable", enable ? "secondary" : "danger", () => changeEnabled(member, enable)));
-    if (state.mode === "internal" && member.id !== state.session.user.sub) actions.append(actionButton("Delete", "danger", () => openDelete(member)));
+    if (state.mode === "internal" && member.id !== state.session.user.sub) actions.append(actionButton("Remove from platform", "danger", () => openDelete(member)));
     row.append(person);
     if (state.mode === "internal") row.append(tags(member.organizationIds, orgNames, "organization"));
     row.append(status, tags(member.applications, appNames, "application"), actions);
@@ -202,10 +202,11 @@ async function submitDeleteUser(event) {
   elements["confirm-delete-user-button"].disabled = true;
   const member = state.deletingMember;
   try {
-    await api(`/api/team/users/${encodeURIComponent(member.id)}`, { method: "DELETE" });
+    const result = await api(`/api/team/users/${encodeURIComponent(member.id)}`, { method: "DELETE" });
+    if (result.user?.removedFromPlatform !== true) throw new Error("The identity service did not confirm that the account was removed from the platform.");
     elements["delete-user-dialog"].close();
     state.deletingMember = null;
-    toast(`${member.email} was permanently deleted.`);
+    toast(`${member.email} was permanently removed from the platform.`);
     await loadTeam();
   } catch (error) {
     setFormError(elements["delete-user-error"], error);

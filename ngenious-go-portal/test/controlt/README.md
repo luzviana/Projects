@@ -75,7 +75,7 @@ Optional settings include `PORT`, `CONTROLT_PUBLIC_ORIGIN`,
 | `POST` | `/api/team/users` | Create one identity, assign one or more organizations, and send one invitation |
 | `PATCH` | `/api/team/users/:userId` | Update memberships, enabled state, and application access |
 | `POST` | `/api/team/users/:userId/resend` | Resend one pending identity invitation |
-| `DELETE` | `/api/team/users/:userId` | Permanently delete an identity; ngenious administrators only |
+| `DELETE` | `/api/team/users/:userId` | Permanently remove an identity from the platform; ngenious administrators only |
 | `GET` | `/api/organizations` | Organizations permitted to the administrator |
 | `GET` | `/api/organizations/:id/applications` | Approved applications |
 | `GET` | `/api/organizations/:id/members` | Organization members and status |

@@ -336,6 +336,7 @@ test("only an internal administrator can permanently delete a team identity", as
   const service = new ControlTService(config, keycloak);
   const result = await service.deleteTeamMember(internal, "user-1");
   assert.equal(result.deleted, true);
+  assert.equal(result.removedFromPlatform, true);
   assert.deepEqual(keycloak.calls.at(-1), ["deleteUser", "user-1"]);
 
   const customerKeycloak = fakeKeycloak();
