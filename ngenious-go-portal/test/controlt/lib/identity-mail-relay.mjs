@@ -80,6 +80,23 @@ function plainIdentityMessage(shortUrl) {
   ].join("\n");
 }
 
+function htmlIdentityMessage(shortUrl) {
+  const link = shortUrl.replaceAll("&", "&amp;").replaceAll('"', "&quot;");
+  return `<!doctype html>
+<html lang="en"><body style="margin:0;background:#f3f6f8;font-family:Arial,sans-serif;color:#102238;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f6f8;"><tr><td align="center" style="padding:32px 16px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-top:4px solid #20bcc5;border-radius:10px;">
+<tr><td style="padding:32px;">
+<p style="margin:0 0 28px;font-size:22px;font-weight:700;color:#08747c;">ngenious</p>
+<h1 style="margin:0 0 14px;font-size:28px;line-height:36px;color:#102238;">Set up your account</h1>
+<p style="margin:0 0 24px;font-size:16px;line-height:25px;color:#52657a;">Use the secure ngenious identity service to create your password and finish setting up your account.</p>
+<p style="margin:0 0 28px;"><a href="${link}" style="display:inline-block;padding:13px 20px;border-radius:7px;background:#20bcc5;color:#102238;font-size:16px;font-weight:700;text-decoration:none;">Continue account setup</a></p>
+<p style="margin:0;font-size:13px;line-height:20px;color:#6a7b8d;">This link expires in 12 hours. If you did not expect this message, no action is required.</p>
+</td></tr></table>
+</td></tr></table>
+</body></html>`;
+}
+
 export class IdentityMailRelay {
   constructor(config, invitations, fetchImpl = fetch) {
     this.config = config;
@@ -100,7 +117,7 @@ export class IdentityMailRelay {
       // downstream corporate filters than Keycloak's multipart HTML template.
       // The raw identity action remains encrypted behind the invitation gateway.
       message.textBody = plainIdentityMessage(invitation.url);
-      message.htmlBody = "";
+      message.htmlBody = htmlIdentityMessage(invitation.url);
     }
     const response = await this.fetch("https://api.postmarkapp.com/email", {
       method: "POST",
