@@ -61,7 +61,8 @@ cleanup() {
     fi
   fi
   unset RECOVERY_ADMIN_USER RECOVERY_ADMIN_PASSWORD POSTMARK_SERVER_TOKEN \
-    CONTROLT_INVITATION_SECRET recovery_admin_id env_temp
+    EXISTING_POSTMARK_SERVER_TOKEN CONTROLT_INVITATION_SECRET \
+    recovery_admin_id env_temp
   exit "$status"
 }
 trap cleanup EXIT
@@ -85,10 +86,18 @@ authenticate_admin "$RECOVERY_ADMIN_USER" "$RECOVERY_ADMIN_PASSWORD"
 recovery_admin_created=true
 
 current_smtp=$(kc get "realms/$REALM" --fields smtpServer | jq -c '.smtpServer // {}')
-printf '%s' "$current_smtp" | jq -e '
-  .host == "smtp.postmarkapp.com" and
-  (.password | type == "string" and length > 10)' >/dev/null
-POSTMARK_SERVER_TOKEN=$(printf '%s' "$current_smtp" | jq -er .password)
+EXISTING_POSTMARK_SERVER_TOKEN=$(sed -n \
+  's/^POSTMARK_SERVER_TOKEN=\([[:alnum:]-]\+\)$/\1/p' "$CONTROLT_ENV" \
+  | head -n 1)
+if [[ -n "$EXISTING_POSTMARK_SERVER_TOKEN" ]]; then
+  POSTMARK_SERVER_TOKEN=$EXISTING_POSTMARK_SERVER_TOKEN
+else
+  printf '%s' "$current_smtp" | jq -e '
+    .host == "smtp.postmarkapp.com" and
+    (.password | type == "string" and length > 10) and
+    (.password | test("^[*]+$") | not)' >/dev/null
+  POSTMARK_SERVER_TOKEN=$(printf '%s' "$current_smtp" | jq -er .password)
+fi
 CONTROLT_INVITATION_SECRET=$(openssl rand -hex 32)
 
 backup="$CONTROLT_ENV.pre-invitation-relay.$(date -u +%Y%m%dT%H%M%SZ)"
