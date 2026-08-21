@@ -89,10 +89,10 @@ smtp_payload=$(jq -cn '{smtpServer: {
   ssl: "false",
   from: "no-reply@ngenious.app",
   fromDisplayName: "ngenious",
-  username: null,
-  password: null,
-  replyTo: null,
-  replyToDisplayName: null
+  username: "",
+  password: "",
+  replyTo: "",
+  replyToDisplayName: ""
 }}')
 
 printf 'Applying the private Keycloak mail route.\n'
@@ -106,7 +106,8 @@ printf '%s' "$saved" | jq -e '
   .host == "controlt" and .port == "2525" and
   .auth == "false" and .starttls == "false" and .ssl == "false" and
   .from == "no-reply@ngenious.app" and
-  (.username == null) and (.password == null) and (.replyTo == null)' >/dev/null
+  ((.username // "") == "") and ((.password // "") == "") and
+  ((.replyTo // "") == "")' >/dev/null
 
 printf 'Keycloak identity email now uses the internal Control invitation relay.\n'
 printf 'Postmark credentials remain only in the protected Control environment file.\n'

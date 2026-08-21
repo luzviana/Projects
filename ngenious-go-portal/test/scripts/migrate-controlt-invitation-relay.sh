@@ -122,7 +122,7 @@ env_temp=
 saved=$(kc get "realms/$REALM" --fields smtpServer | jq -c .smtpServer)
 printf '%s' "$saved" | jq -e '
   .host == "controlt" and .port == "2525" and
-  (.username == null) and (.password == null)' >/dev/null
+  ((.username // "") == "") and ((.password // "") == "")' >/dev/null
 
 printf 'Migrated identity mail to the scanner-safe Control invitation relay.\n'
 printf 'The prior protected Control environment is retained at %s for rollback.\n' "$backup"
