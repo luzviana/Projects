@@ -123,7 +123,6 @@ export class ControlTService {
         firstName: user.firstName || "",
         lastName: user.lastName || "",
         status: statusOf(user),
-        emailVerified: Boolean(user.emailVerified),
         applications: await this.assignedApplications(user.id, applications),
       });
     }
@@ -160,7 +159,6 @@ export class ControlTService {
         firstName: user.firstName || "",
         lastName: user.lastName || "",
         status: statusOf(user),
-        emailVerified: Boolean(user.emailVerified),
         organizationIds: [...current.organizationIds],
         applications: await this.assignedApplications(user.id, applications),
       });

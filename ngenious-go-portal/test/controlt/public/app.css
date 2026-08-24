@@ -241,7 +241,6 @@ input:focus, select:focus { border-color: var(--cyan-dark); box-shadow: 0 0 0 3p
 .status.active { color: var(--success); background: var(--success-pale); }
 .status.pending { color: var(--warning); background: var(--warning-pale); }
 .status.disabled { color: var(--ink-soft); background: #eef2f4; }
-.email-verification { color: var(--ink-soft); font-size: 0.72rem; font-weight: 700; }
 .application-tags, .organization-tags { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .organization-tag { padding: 0.22rem 0.45rem; border: 1px solid #d3dbe1; border-radius: 999px; color: var(--ink-soft); font-size: 0.75rem; font-weight: 700; background: #f8fafb; }
 .tag { padding: 0.22rem 0.45rem; border: 1px solid #cbe8ea; border-radius: 0.35rem; color: #075c62; font-size: 0.75rem; font-weight: 700; background: var(--cyan-pale); }

@@ -414,7 +414,7 @@ test("an internal administrator cannot delete their own account", async () => {
   assert.equal(keycloak.calls.length, 0);
 });
 
-test("member status distinguishes setup completion from email verification", async () => {
+test("member status exposes access readiness without email verification", async () => {
   const users = {
     pending: { id: "pending", email: "p@example.com", enabled: true, emailVerified: false, requiredActions: ["UPDATE_PASSWORD"] },
     setupComplete: { id: "setupComplete", email: "complete@example.com", enabled: true, emailVerified: false, requiredActions: [] },
@@ -428,7 +428,7 @@ test("member status distinguishes setup completion from email verification", asy
   const service = new ControlTService(config, keycloak);
   const members = await service.listMembers(internal, "org-a");
   assert.deepEqual(members.map(({ status }) => status), ["Pending", "Active", "Active", "Disabled"]);
-  assert.deepEqual(members.map(({ emailVerified }) => emailVerified), [false, false, true, true]);
+  assert.ok(members.every((member) => !("emailVerified" in member)));
 });
 
 test("invalid email and names are rejected before Keycloak mutation", async () => {

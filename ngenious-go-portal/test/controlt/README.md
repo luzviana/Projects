@@ -43,8 +43,9 @@ organization, so organization controls are not shown to them.
   update approved application access;
 - provide a pending-account fallback that generates a strong temporary
   password, displays it once to the administrator, and requires the member to
-  replace it at first sign-in; after that password change the account is active,
-  while email verification remains visible as a separate informational state;
+  replace it at first sign-in; before that step the Team page shows **Not signed
+  in yet**, and after it the account is **Active**; email-verification state is
+  not exposed to administrators;
 - let only an ngenious administrator permanently delete an identity, with an
   explicit organization-impact confirmation in the interface; and
 - write structured audit events without credentials or action links.

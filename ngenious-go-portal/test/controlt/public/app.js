@@ -93,6 +93,10 @@ function actionButton(label, className, action) {
   const button = document.createElement("button"); button.type = "button"; button.className = `button small ${className}`; button.textContent = label; button.addEventListener("click", action); return button;
 }
 
+function statusLabel(status) {
+  return status === "Pending" ? "Not signed in yet" : status;
+}
+
 function renderMembers() {
   const query = elements["member-search"].value.trim().toLowerCase();
   const filtered = state.members.filter((member) => `${member.firstName} ${member.lastName} ${member.email}`.toLowerCase().includes(query));
@@ -114,10 +118,7 @@ function renderMembers() {
     const name = document.createElement("strong"); name.textContent = `${member.firstName} ${member.lastName}`.trim() || member.email;
     const email = document.createElement("span"); email.textContent = member.email; person.append(name, email);
     const statusCell = document.createElement("div"); statusCell.className = "status-cell";
-    const status = document.createElement("span"); status.className = `status ${member.status.toLowerCase()}`; status.textContent = member.status; statusCell.append(status);
-    if (!member.emailVerified) {
-      const verification = document.createElement("span"); verification.className = "email-verification"; verification.textContent = "Email unverified"; statusCell.append(verification);
-    }
+    const status = document.createElement("span"); status.className = `status ${member.status.toLowerCase()}`; status.textContent = statusLabel(member.status); statusCell.append(status);
     const actions = document.createElement("div"); actions.className = "actions";
     if (member.status === "Pending") actions.append(actionButton("Resend invitation", "secondary", (event) => resendInvitation(member, event.currentTarget)));
     actions.append(actionButton(state.mode === "internal" ? "Manage" : "Manage access", "secondary", () => openAccess(member)));

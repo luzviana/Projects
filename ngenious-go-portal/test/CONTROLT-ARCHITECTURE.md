@@ -218,7 +218,7 @@ The customer-administrator page contains:
 
 - organization name, displayed read-only;
 - a searchable member list;
-- status values `Pending`, `Active`, and `Disabled`;
+- access status values **Not signed in yet**, **Active**, and **Disabled**;
 - permitted application assignments;
 - **Add user**;
 - **Resend invitation** for pending users; and
@@ -244,7 +244,9 @@ POST reveals the action through an HTTP 303 redirect. Expired or used invitation
 links show a concise explanation directing the person to request a new
 invitation; they do not show Keycloak's generic **Back to application** link.
 
-The interface does not expose email-verification flags, required-action lists,
+**Not signed in yet** means the person has not completed their initial password
+action and first sign-in. It is the only setup notification shown to an
+administrator. The interface does not expose email-verification flags, required-action lists,
 credentials, OTP, WebAuthn, groups, raw roles, realm configuration, clients, or
 authentication flows. MFA and passwordless administration are outside the
 current PoC.
