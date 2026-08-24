@@ -22,7 +22,12 @@ function stringArray(value, field) {
 }
 
 function statusOf(user) {
-  if (!user.enabled) return "Disabled";
+  if (user.enabled === false) return "Disabled";
+  const setupMethod = attributeValues(user.attributes, "ngenious.setupMethod")[0];
+  if (setupMethod === "temporary-password") {
+    const requiredActions = Array.isArray(user.requiredActions) ? user.requiredActions : [];
+    return requiredActions.includes("UPDATE_PASSWORD") ? "Pending" : "Active";
+  }
   return user.emailVerified ? "Active" : "Pending";
 }
 
@@ -122,6 +127,7 @@ export class ControlTService {
         firstName: user.firstName || "",
         lastName: user.lastName || "",
         status: statusOf(user),
+        emailVerified: Boolean(user.emailVerified),
         applications: await this.assignedApplications(user.id, applications),
       });
     }
@@ -158,6 +164,7 @@ export class ControlTService {
         firstName: user.firstName || "",
         lastName: user.lastName || "",
         status: statusOf(user),
+        emailVerified: Boolean(user.emailVerified),
         organizationIds: [...current.organizationIds],
         applications: await this.assignedApplications(user.id, applications),
       });
@@ -210,8 +217,11 @@ export class ControlTService {
           }
         }
         await this.applyApplications(existing.id, selected, selection.applications);
-        if (existing.enabled && !existing.emailVerified) {
+        if (statusOf(existing) === "Pending") {
           await this.keycloak.sendSetupEmail(existing.id, this.config.invitationLifespanSeconds);
+          await this.keycloak.updateUser(existing.id, {
+            attributes: { ...(existing.attributes || {}), "ngenious.setupMethod": ["email-invitation"] },
+          });
         }
       } catch (error) {
         for (const organizationId of addedOrganizationIds.reverse()) {
@@ -226,7 +236,7 @@ export class ControlTService {
         email,
         status: statusOf(existing),
         created: false,
-        invitationSent: existing.enabled && !existing.emailVerified,
+        invitationSent: statusOf(existing) === "Pending",
       };
     }
 
@@ -235,7 +245,11 @@ export class ControlTService {
       const now = new Date().toISOString();
       userId = await this.keycloak.createUser({
         username: email, email, firstName, lastName, enabled: true, emailVerified: false,
-        attributes: { "ngenious.invitedAt": [now], "ngenious.invitedBy": [session.sub] },
+        attributes: {
+          "ngenious.invitedAt": [now],
+          "ngenious.invitedBy": [session.sub],
+          "ngenious.setupMethod": ["email-invitation"],
+        },
       });
       for (const organizationId of selection.organizationIds) await this.keycloak.addOrganizationMember(organizationId, userId);
       await this.applyApplications(userId, selected, selection.applications);
@@ -303,23 +317,34 @@ export class ControlTService {
   async resendTeamInvitation(session, userId) {
     const { user } = await this.teamMember(session, userId);
     if (!user.enabled) throw new HttpError(409, "member_disabled", "Enable this person before resending the invitation.");
-    if (user.emailVerified) throw new HttpError(409, "member_already_active", "This person has already completed setup.");
+    if (statusOf(user) !== "Pending") throw new HttpError(409, "member_already_active", "This person has already completed setup.");
     await this.keycloak.sendSetupEmail(userId, this.config.invitationLifespanSeconds);
+    await this.keycloak.updateUser(userId, {
+      attributes: { ...(user.attributes || {}), "ngenious.setupMethod": ["email-invitation"] },
+    });
     return { id: userId, email: user.email || user.username, status: "Pending" };
   }
 
   async generateSetupPassword(session, userId) {
     const { user } = await this.teamMember(session, userId);
     if (!user.enabled) throw new HttpError(409, "member_disabled", "Enable this person before generating a setup password.");
-    if (user.emailVerified) throw new HttpError(409, "member_already_active", "This person has already completed setup.");
+    if (statusOf(user) !== "Pending") throw new HttpError(409, "member_already_active", "This person has already completed setup.");
     const password = setupPassword();
     try {
       await this.keycloak.setTemporaryPassword(userId, password);
       const originalRequiredActions = Array.isArray(user.requiredActions) ? user.requiredActions : [];
-      const requiredActions = originalRequiredActions.filter((action) => action !== "VERIFY_EMAIL");
-      if (requiredActions.length !== originalRequiredActions.length) {
-        await this.keycloak.updateUser(userId, { requiredActions });
-      }
+      const requiredActions = [...new Set([
+        ...originalRequiredActions.filter((action) => action !== "VERIFY_EMAIL"),
+        "UPDATE_PASSWORD",
+      ])];
+      await this.keycloak.updateUser(userId, {
+        requiredActions,
+        attributes: {
+          ...(user.attributes || {}),
+          "ngenious.setupMethod": ["temporary-password"],
+          "ngenious.setupPasswordIssuedAt": [new Date().toISOString()],
+        },
+      });
       audit({ outcome: "success", operation: "generate_setup_password", actor: session.sub, target: userId });
       return { id: userId, email: user.email || user.username, setupPassword: password, temporary: true };
     } catch (error) {
@@ -373,7 +398,8 @@ export class ControlTService {
     if (existing) {
       const member = await this.ensureMembership(existing.id, organizationId);
       if (!member) throw new HttpError(409, "incompatible_identity", "This email already belongs to another or unassigned identity. Contact ngenious support.");
-      throw new HttpError(409, existing.emailVerified ? "active_identity_exists" : "pending_identity_exists", existing.emailVerified ? "This person is already active in the organization." : "This person is already pending. Use Resend invitation.", { userId: existing.id });
+      const existingStatus = statusOf(existing);
+      throw new HttpError(409, existingStatus === "Active" ? "active_identity_exists" : "pending_identity_exists", existingStatus === "Active" ? "This person is already active in the organization." : "This person is already pending. Use Resend invitation.", { userId: existing.id });
     }
 
     let userId;
@@ -389,6 +415,7 @@ export class ControlTService {
         attributes: {
           "ngenious.invitedAt": [now],
           "ngenious.invitedBy": [session.sub],
+          "ngenious.setupMethod": ["email-invitation"],
         },
       });
       await this.keycloak.addOrganizationMember(organizationId, userId);
@@ -416,13 +443,14 @@ export class ControlTService {
   async resendInvitation(session, organizationId, userId) {
     const user = await this.member(session, organizationId, userId);
     if (!user.enabled) throw new HttpError(409, "member_disabled", "Enable this person before resending the invitation.");
-    if (user.emailVerified) throw new HttpError(409, "member_already_active", "This person has already completed setup.");
+    if (statusOf(user) !== "Pending") throw new HttpError(409, "member_already_active", "This person has already completed setup.");
     await this.keycloak.sendSetupEmail(userId, this.config.invitationLifespanSeconds);
     await this.keycloak.updateUser(userId, {
       attributes: {
         ...(user.attributes || {}),
         "ngenious.lastInvitationAt": [new Date().toISOString()],
         "ngenious.lastInvitationBy": [session.sub],
+        "ngenious.setupMethod": ["email-invitation"],
       },
     });
     audit({ outcome: "success", operation: "resend_invitation", actor: session.sub, target: userId, organization: organizationId });

@@ -113,14 +113,18 @@ function renderMembers() {
     const person = document.createElement("div"); person.className = "person";
     const name = document.createElement("strong"); name.textContent = `${member.firstName} ${member.lastName}`.trim() || member.email;
     const email = document.createElement("span"); email.textContent = member.email; person.append(name, email);
-    const status = document.createElement("span"); status.className = `status ${member.status.toLowerCase()}`; status.textContent = member.status;
+    const statusCell = document.createElement("div"); statusCell.className = "status-cell";
+    const status = document.createElement("span"); status.className = `status ${member.status.toLowerCase()}`; status.textContent = member.status; statusCell.append(status);
+    if (!member.emailVerified) {
+      const verification = document.createElement("span"); verification.className = "email-verification"; verification.textContent = "Email unverified"; statusCell.append(verification);
+    }
     const actions = document.createElement("div"); actions.className = "actions";
     if (member.status === "Pending") actions.append(actionButton("Resend invitation", "secondary", (event) => resendInvitation(member, event.currentTarget)));
     actions.append(actionButton(state.mode === "internal" ? "Manage" : "Manage access", "secondary", () => openAccess(member)));
     const enable = member.status === "Disabled"; actions.append(actionButton(enable ? "Enable" : "Disable", enable ? "secondary" : "danger", () => changeEnabled(member, enable)));
     row.append(person);
     if (state.mode === "internal") row.append(tags(member.organizationIds, orgNames, "organization"));
-    row.append(status, tags(member.applications, appNames, "application"), actions);
+    row.append(statusCell, tags(member.applications, appNames, "application"), actions);
     elements["member-list"].append(row);
   }
   elements["total-count"].textContent = state.members.length;

@@ -186,7 +186,7 @@ test("adding an existing pending team member sends a new setup invitation", asyn
   });
   assert.equal(result.created, false);
   assert.equal(result.invitationSent, true);
-  assert.deepEqual(keycloak.calls.map(([name]) => name), ["addOrganizationMember", "sendSetupEmail"]);
+  assert.deepEqual(keycloak.calls.map(([name]) => name), ["addOrganizationMember", "sendSetupEmail", "updateUser"]);
 });
 
 test("a failed multi-organization assignment rolls back memberships added to an existing identity", async () => {
@@ -334,7 +334,11 @@ test("a pending team member receives a strong temporary setup password", async (
   assert.match(result.setupPassword, /[0-9]/);
   assert.match(result.setupPassword, /[!@#$%*\-_=+]/);
   assert.deepEqual(keycloak.calls[0], ["setTemporaryPassword", "pending", result.setupPassword]);
-  assert.deepEqual(keycloak.calls[1], ["updateUser", "pending", { requiredActions: ["UPDATE_PROFILE"] }]);
+  assert.equal(keycloak.calls[1][0], "updateUser");
+  assert.equal(keycloak.calls[1][1], "pending");
+  assert.deepEqual(keycloak.calls[1][2].requiredActions, ["UPDATE_PROFILE", "UPDATE_PASSWORD"]);
+  assert.deepEqual(keycloak.calls[1][2].attributes["ngenious.setupMethod"], ["temporary-password"]);
+  assert.equal(Number.isNaN(Date.parse(keycloak.calls[1][2].attributes["ngenious.setupPasswordIssuedAt"][0])), false);
 });
 
 test("setup passwords are refused for active and disabled team members", async () => {
@@ -409,9 +413,10 @@ test("an internal administrator cannot delete their own account", async () => {
   assert.equal(keycloak.calls.length, 0);
 });
 
-test("member status is derived from enabled and verified state", async () => {
+test("member status distinguishes setup completion from email verification", async () => {
   const users = {
-    pending: { id: "pending", email: "p@example.com", enabled: true, emailVerified: false },
+    pending: { id: "pending", email: "p@example.com", enabled: true, emailVerified: false, attributes: { "ngenious.setupMethod": ["temporary-password"] }, requiredActions: ["UPDATE_PASSWORD"] },
+    fallbackActive: { id: "fallbackActive", email: "fallback@example.com", enabled: true, emailVerified: false, attributes: { "ngenious.setupMethod": ["temporary-password"] }, requiredActions: [] },
     active: { id: "active", email: "a@example.com", enabled: true, emailVerified: true },
     disabled: { id: "disabled", email: "d@example.com", enabled: false, emailVerified: true },
   };
@@ -421,7 +426,8 @@ test("member status is derived from enabled and verified state", async () => {
   });
   const service = new ControlTService(config, keycloak);
   const members = await service.listMembers(internal, "org-a");
-  assert.deepEqual(members.map(({ status }) => status), ["Pending", "Active", "Disabled"]);
+  assert.deepEqual(members.map(({ status }) => status), ["Pending", "Active", "Active", "Disabled"]);
+  assert.deepEqual(members.map(({ emailVerified }) => emailVerified), [false, false, true, true]);
 });
 
 test("invalid email and names are rejected before Keycloak mutation", async () => {
