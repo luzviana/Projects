@@ -35,6 +35,7 @@ function fakeKeycloak(overrides = {}) {
     deleteUser: async (...args) => calls.push(["deleteUser", ...args]),
     getUser: async (id) => ({ id, username: "person@example.com", email: "person@example.com", enabled: true, emailVerified: false }),
     updateUser: async (...args) => calls.push(["updateUser", ...args]),
+    setTemporaryPassword: async (...args) => calls.push(["setTemporaryPassword", ...args]),
     ...overrides,
   };
   return api;
@@ -101,6 +102,25 @@ test("Keycloak membership requests use the realm organization-member endpoint", 
   assert.equal(requests[1][0], "http://keycloak:8080/admin/realms/go-portal-test/organizations/members/person%20%2F%20one/organizations");
   assert.equal(requests[2][0], "http://keycloak:8080/admin/realms/go-portal-test/organizations/org%20%2F%20one/members/person%20%2F%20one");
   assert.equal(requests[2][1], "DELETE");
+});
+
+test("Keycloak temporary passwords use the credential reset endpoint", async () => {
+  const requests = [];
+  const client = new KeycloakAdmin({
+    keycloakInternalUrl: "http://keycloak:8080",
+    realm: "go-portal-test",
+    serviceClientId: "controlt-service",
+    serviceClientSecret: "secret",
+  }, async (url, options = {}) => {
+    if (url.endsWith("/protocol/openid-connect/token")) {
+      return new Response(JSON.stringify({ access_token: "token", expires_in: 60 }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    requests.push([url, options]);
+    return new Response(null, { status: 204 });
+  });
+  await client.setTemporaryPassword("person / one", "Test-password-42!");
+  assert.equal(requests[0][0], "http://keycloak:8080/admin/realms/go-portal-test/users/person%20%2F%20one/reset-password");
+  assert.deepEqual(JSON.parse(requests[0][1].body), { type: "password", value: "Test-password-42!", temporary: true });
 });
 
 test("internal Team view shows a multi-organization person only once", async () => {
@@ -295,6 +315,38 @@ test("resend is blocked for active and disabled members", async () => {
     const service = new ControlTService(config, keycloak);
     await assert.rejects(() => service.resendInvitation(internal, "org-a", user.id),
       (error) => error.status === 409 && error.code === code);
+    assert.equal(keycloak.calls.length, 0);
+  }
+});
+
+test("a pending team member receives a strong temporary setup password", async () => {
+  const keycloak = fakeKeycloak({
+    getUser: async () => ({
+      id: "pending", email: "pending@example.com", enabled: true, emailVerified: false,
+      requiredActions: ["VERIFY_EMAIL", "UPDATE_PROFILE"],
+    }),
+  });
+  const result = await new ControlTService(config, keycloak).generateSetupPassword(internal, "pending");
+  assert.equal(result.temporary, true);
+  assert.equal(result.setupPassword.length, 20);
+  assert.match(result.setupPassword, /[a-z]/);
+  assert.match(result.setupPassword, /[A-Z]/);
+  assert.match(result.setupPassword, /[0-9]/);
+  assert.match(result.setupPassword, /[!@#$%*\-_=+]/);
+  assert.deepEqual(keycloak.calls[0], ["setTemporaryPassword", "pending", result.setupPassword]);
+  assert.deepEqual(keycloak.calls[1], ["updateUser", "pending", { requiredActions: ["UPDATE_PROFILE"] }]);
+});
+
+test("setup passwords are refused for active and disabled team members", async () => {
+  for (const [user, code] of [
+    [{ id: "active", enabled: true, emailVerified: true }, "member_already_active"],
+    [{ id: "disabled", enabled: false, emailVerified: false }, "member_disabled"],
+  ]) {
+    const keycloak = fakeKeycloak({ getUser: async () => user });
+    await assert.rejects(
+      () => new ControlTService(config, keycloak).generateSetupPassword(internal, user.id),
+      (error) => error.status === 409 && error.code === code,
+    );
     assert.equal(keycloak.calls.length, 0);
   }
 });

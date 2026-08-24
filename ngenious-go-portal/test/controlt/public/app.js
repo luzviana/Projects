@@ -1,4 +1,4 @@
-const state = { session: null, csrf: null, mode: null, organizations: [], applications: [], members: [], editingMember: null, deletingMember: null, addUserDirty: false };
+const state = { session: null, csrf: null, mode: null, organizations: [], applications: [], members: [], editingMember: null, deletingMember: null, setupPassword: null, addUserDirty: false };
 const byId = (id) => document.getElementById(id);
 const elements = Object.fromEntries([
   "signin-panel", "workspace", "loading-panel", "user-menu", "user-menu-button", "user-menu-popover",
@@ -9,6 +9,9 @@ const elements = Object.fromEntries([
   "add-application-options", "add-user-error", "create-user-button", "access-dialog", "access-form",
   "access-user", "edit-organization-fieldset", "edit-organization-options", "edit-application-options",
   "access-error", "save-access-button", "manage-delete-section", "manage-delete-button",
+  "manage-setup-section", "manage-setup-button", "setup-password-dialog", "setup-password-error",
+  "confirm-setup-password-button", "setup-password-result-dialog", "setup-password-result",
+  "copy-setup-password-button",
   "delete-user-dialog", "delete-user-form", "delete-user-name", "discard-user-dialog",
   "confirm-discard-user-button",
   "delete-user-organizations", "delete-user-error", "confirm-delete-user-button", "toast",
@@ -163,6 +166,7 @@ function openAddUser() {
 function openAccess(member) {
   state.editingMember = member; elements["access-error"].hidden = true;
   elements["access-user"].textContent = `Manage organizations and applications for ${`${member.firstName} ${member.lastName}`.trim() || member.email}.`;
+  elements["manage-setup-section"].hidden = member.status !== "Pending";
   elements["manage-delete-section"].hidden = state.mode !== "internal" || member.id === state.session.user.sub;
   prepareOrganizationOptions(elements["edit-organization-options"], member.organizationIds);
   syncApplicationOptions(elements["edit-organization-options"], elements["edit-application-options"], member.applications);
@@ -174,6 +178,47 @@ function openManagedDelete() {
   if (!member) return;
   elements["access-dialog"].close();
   openDelete(member);
+}
+
+function openSetupPassword() {
+  if (!state.editingMember) return;
+  elements["setup-password-error"].hidden = true;
+  elements["setup-password-dialog"].showModal();
+}
+
+async function generateSetupPassword() {
+  const member = state.editingMember;
+  if (!member) return;
+  elements["setup-password-error"].hidden = true;
+  elements["confirm-setup-password-button"].disabled = true;
+  try {
+    const result = await api(`/api/team/users/${encodeURIComponent(member.id)}/setup-password`, { method: "POST" });
+    state.setupPassword = result.user.setupPassword;
+    elements["setup-password-result"].value = state.setupPassword;
+    elements["setup-password-dialog"].close();
+    elements["access-dialog"].close();
+    elements["setup-password-result-dialog"].showModal();
+  } catch (error) {
+    setFormError(elements["setup-password-error"], error);
+  } finally {
+    elements["confirm-setup-password-button"].disabled = false;
+  }
+}
+
+async function copySetupPassword() {
+  if (!state.setupPassword) return;
+  try {
+    await navigator.clipboard.writeText(state.setupPassword);
+  } catch {
+    elements["setup-password-result"].select();
+    document.execCommand("copy");
+  }
+  toast("Setup password copied.");
+}
+
+function clearSetupPassword() {
+  state.setupPassword = null;
+  elements["setup-password-result"].value = "";
 }
 
 function openDelete(member) {
@@ -246,6 +291,9 @@ elements["add-user-form"].addEventListener("input", () => { state.addUserDirty =
 elements["add-user-form"].addEventListener("change", () => { state.addUserDirty = true; });
 elements["access-form"].addEventListener("submit", submitAccess);
 elements["manage-delete-button"].addEventListener("click", openManagedDelete);
+elements["manage-setup-button"].addEventListener("click", openSetupPassword);
+elements["confirm-setup-password-button"].addEventListener("click", generateSetupPassword);
+elements["copy-setup-password-button"].addEventListener("click", copySetupPassword);
 elements["delete-user-form"].addEventListener("submit", submitDeleteUser);
 elements["add-organization-options"].addEventListener("change", () => syncApplicationOptions(elements["add-organization-options"], elements["add-application-options"], selected(elements["add-application-options"], "applications")));
 elements["edit-organization-options"].addEventListener("change", () => syncApplicationOptions(elements["edit-organization-options"], elements["edit-application-options"], selected(elements["edit-application-options"], "applications")));
@@ -256,11 +304,13 @@ function requestDialogClose(dialog) {
     elements["confirm-discard-user-button"].focus();
     return;
   }
+  if (dialog === elements["setup-password-result-dialog"]) clearSetupPassword();
   dialog.close();
 }
 
 for (const button of document.querySelectorAll("[data-close-dialog]")) button.addEventListener("click", () => requestDialogClose(byId(button.dataset.closeDialog)));
 elements["add-user-dialog"].addEventListener("cancel", (event) => { event.preventDefault(); requestDialogClose(elements["add-user-dialog"]); });
+elements["setup-password-result-dialog"].addEventListener("cancel", (event) => { event.preventDefault(); requestDialogClose(elements["setup-password-result-dialog"]); });
 elements["confirm-discard-user-button"].addEventListener("click", () => {
   state.addUserDirty = false;
   elements["discard-user-dialog"].close();

@@ -74,6 +74,7 @@ function harness() {
     async addTeamMember(session, body) { calls.push(["addTeamMember", session, body]); return { id: "user-1", status: "Pending" }; },
     async updateTeamMember(session, userId, body) { calls.push(["updateTeamMember", session, userId, body]); return { id: userId, ...body }; },
     async resendTeamInvitation(session, userId) { calls.push(["resendTeamInvitation", session, userId]); return { id: userId, status: "Pending" }; },
+    async generateSetupPassword(session, userId) { calls.push(["generateSetupPassword", session, userId]); return { id: userId, setupPassword: "Temporary-password-42!", temporary: true }; },
     async deleteTeamMember(session, userId) { calls.push(["deleteTeamMember", session, userId]); return { id: userId, deleted: true, removedFromPlatform: true }; },
     async listOrganizations(session) { calls.push(["listOrganizations", session]); return [{ id: "org-1", name: "Example" }]; },
     async listApplications(session, organizationId) { calls.push(["listApplications", session, organizationId]); return []; },
@@ -137,6 +138,8 @@ await test("serves the application to an authenticated administrator", async () 
   assert.match(res.body, />Team</);
   assert.match(res.body, /Add team member/);
   assert.match(res.body, /Delete account/);
+  assert.match(res.body, /Generate setup password/);
+  assert.match(res.body, /shown only once/);
   assert.match(res.body, /Remove from platform/);
   assert.match(res.body, /Manage my account/);
   assert.match(res.body, /https:\/\/id\.ngenious\.app\/realms\/go-portal-test\/account\//);
@@ -277,6 +280,18 @@ await test("permanently deletes a Team identity through a protected request", as
   assert.equal(res.json.user.deleted, true);
   assert.equal(res.json.user.removedFromPlatform, true);
   assert.deepEqual(calls[0].slice(0, 3), ["deleteTeamMember", calls[0][1], "person one"]);
+});
+
+await test("generates a setup password through a protected no-store request", async () => {
+  const { handler, authHeaders, calls } = harness();
+  const res = await invoke(handler, {
+    method: "POST", url: "/api/team/users/person%20one/setup-password", headers: authHeaders,
+  });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.json.user.setupPassword, "Temporary-password-42!");
+  assert.equal(res.json.user.temporary, true);
+  assert.equal(res.headers.get("cache-control"), "no-store");
+  assert.deepEqual(calls[0].slice(0, 3), ["generateSetupPassword", calls[0][1], "person one"]);
 });
 
 await test("rejects a write when the CSRF token is missing", async () => {

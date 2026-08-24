@@ -49,8 +49,10 @@ ControlT is an administration facade over supported Keycloak APIs. It owns:
 - encrypted, expiring invitation indirection; and
 - minimal administrator audit metadata.
 
-ControlT must never store passwords, validate passwords, issue identity tokens,
-implement login, or reproduce Keycloak authentication flows.
+ControlT must never store or log passwords, validate them itself, issue identity
+tokens, implement login, or reproduce Keycloak authentication flows. It may
+generate a temporary setup password in memory and submit it directly to
+Keycloak when an administrator explicitly uses the delivery fallback.
 
 ## Components
 
@@ -199,6 +201,17 @@ memberships or roles.
 - ControlT never deletes and recreates an existing identity merely to resend an
   invitation.
 
+### Setup-password fallback
+
+If an invitation cannot be delivered, an authorized administrator may generate
+a strong temporary setup password for an enabled, pending member. Control sends
+the password directly to Keycloak as a temporary credential and displays it
+once to the administrator. It is never emailed, persisted by Control, or placed
+in logs or audit metadata. The administrator shares it through a separate
+trusted channel, and Keycloak requires the member to replace it at first
+sign-in. Generating another setup password invalidates the previous one. The
+member's email remains unverified.
+
 ## Customer interface
 
 The customer-administrator page contains:
@@ -209,6 +222,7 @@ The customer-administrator page contains:
 - permitted application assignments;
 - **Add user**;
 - **Resend invitation** for pending users; and
+- **Generate setup password** inside Manage for pending users; and
 - **Enable** or **Disable** when permitted.
 
 The internal-administrator version lists each person once and adds organization
@@ -289,7 +303,10 @@ The target is accepted only when tests demonstrate that:
     or public 502 response;
 12. outbound email contains only the opaque ngenious invitation URL and never
     the raw Keycloak action token; and
-13. a GET request from a mail scanner cannot activate or consume an invitation.
+13. a GET request from a mail scanner cannot activate or consume an invitation;
+    and
+14. a setup password is temporary, displayed once, never logged or persisted by
+    Control, and refused for active or disabled accounts.
 
 ## Automated verification
 

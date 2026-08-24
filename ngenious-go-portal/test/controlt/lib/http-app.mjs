@@ -118,6 +118,10 @@ export function createRequestHandler({ config, sessions, oidc, service, invitati
         csrf(request, session);
         return json(response, 200, { user: await service.resendTeamInvitation(session, segments[3]) });
       }
+      if (request.method === "POST" && segments.length === 5 && segments[4] === "setup-password") {
+        csrf(request, session);
+        return json(response, 200, { user: await service.generateSetupPassword(session, segments[3]) });
+      }
       if (request.method === "DELETE" && segments.length === 4) {
         csrf(request, session);
         return json(response, 200, { user: await service.deleteTeamMember(session, segments[3]) });

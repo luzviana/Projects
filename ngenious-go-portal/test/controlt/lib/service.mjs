@@ -1,6 +1,6 @@
 import { HttpError } from "./errors.mjs";
 import { attributeValues } from "./keycloak.mjs";
-import { createHash } from "node:crypto";
+import { createHash, randomInt } from "node:crypto";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -31,6 +31,23 @@ function audit(event) {
 }
 
 const opaqueEmailTarget = (email) => `email-sha256:${createHash("sha256").update(email).digest("hex").slice(0, 16)}`;
+
+function setupPassword() {
+  const groups = [
+    "abcdefghjkmnpqrstuvwxyz",
+    "ABCDEFGHJKLMNPQRSTUVWXYZ",
+    "23456789",
+    "!@#$%*-_=+",
+  ];
+  const all = groups.join("");
+  const characters = groups.map((group) => group[randomInt(group.length)]);
+  while (characters.length < 20) characters.push(all[randomInt(all.length)]);
+  for (let index = characters.length - 1; index > 0; index -= 1) {
+    const swap = randomInt(index + 1);
+    [characters[index], characters[swap]] = [characters[swap], characters[index]];
+  }
+  return characters.join("");
+}
 
 export class ControlTService {
   constructor(config, keycloak) {
@@ -289,6 +306,26 @@ export class ControlTService {
     if (user.emailVerified) throw new HttpError(409, "member_already_active", "This person has already completed setup.");
     await this.keycloak.sendSetupEmail(userId, this.config.invitationLifespanSeconds);
     return { id: userId, email: user.email || user.username, status: "Pending" };
+  }
+
+  async generateSetupPassword(session, userId) {
+    const { user } = await this.teamMember(session, userId);
+    if (!user.enabled) throw new HttpError(409, "member_disabled", "Enable this person before generating a setup password.");
+    if (user.emailVerified) throw new HttpError(409, "member_already_active", "This person has already completed setup.");
+    const password = setupPassword();
+    try {
+      await this.keycloak.setTemporaryPassword(userId, password);
+      const originalRequiredActions = Array.isArray(user.requiredActions) ? user.requiredActions : [];
+      const requiredActions = originalRequiredActions.filter((action) => action !== "VERIFY_EMAIL");
+      if (requiredActions.length !== originalRequiredActions.length) {
+        await this.keycloak.updateUser(userId, { requiredActions });
+      }
+      audit({ outcome: "success", operation: "generate_setup_password", actor: session.sub, target: userId });
+      return { id: userId, email: user.email || user.username, setupPassword: password, temporary: true };
+    } catch (error) {
+      audit({ outcome: "failed", operation: "generate_setup_password", actor: session.sub, target: userId });
+      throw error;
+    }
   }
 
   async deleteTeamMember(session, userId) {

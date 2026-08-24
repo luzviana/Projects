@@ -113,6 +113,14 @@ export class KeycloakAdmin {
     return this.request(`/users/${encodeURIComponent(userId)}`, { method: "PUT", body: representation, expected: [204] });
   }
 
+  setTemporaryPassword(userId, password) {
+    return this.request(`/users/${encodeURIComponent(userId)}/reset-password`, {
+      method: "PUT",
+      body: { type: "password", value: password, temporary: true },
+      expected: [204],
+    });
+  }
+
   deleteUser(userId) {
     return this.request(`/users/${encodeURIComponent(userId)}`, { method: "DELETE", expected: [204] });
   }

@@ -279,6 +279,11 @@ dialog form { display: flex; flex-direction: column; gap: 1.15rem; padding: clam
 .manage-delete strong { color: var(--danger); }
 .manage-delete p { margin: 0.3rem 0 0; color: #7a271f; font-size: 0.84rem; line-height: 1.45; }
 .manage-delete .button { flex: 0 0 auto; }
+.manage-action { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem; border: 1px solid var(--line); border-radius: 0.6rem; background: #f6fbfc; }
+.manage-action[hidden] { display: none; }
+.manage-action p { margin: 0.3rem 0 0; color: var(--ink-soft); font-size: 0.84rem; line-height: 1.45; }
+.manage-action .button { flex: 0 0 auto; }
+.password-result { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 1.05rem; letter-spacing: 0.035em; }
 .icon-button { width: 2.25rem; height: 2.25rem; padding: 0; border: 0; border-radius: 50%; color: var(--ink-soft); font-size: 1.75rem; line-height: 1; background: transparent; }
 .icon-button:hover { background: var(--canvas); }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
@@ -325,6 +330,8 @@ legend { margin-bottom: 0.25rem; }
   .dialog-actions .button { width: 100%; }
   .manage-delete { align-items: stretch; flex-direction: column; }
   .manage-delete .button { width: 100%; }
+  .manage-action { align-items: stretch; flex-direction: column; }
+  .manage-action .button { width: 100%; }
   .member-row { padding: 1rem; }
 }
 

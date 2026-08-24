@@ -41,12 +41,17 @@ organization, so organization controls are not shown to them.
 - automatically send a fresh setup email when an existing pending identity is
   added, safely resend pending invitations, enable or disable members, and
   update approved application access;
+- provide a pending-account fallback that generates a strong temporary
+  password, displays it once to the administrator, and requires the member to
+  replace it at first sign-in;
 - let only an ngenious administrator permanently delete an identity, with an
   explicit organization-impact confirmation in the interface; and
 - write structured audit events without credentials or action links.
 
-It does not generate Keycloak action tokens, store passwords, access the
+It does not generate Keycloak action tokens, store or log passwords, access the
 Keycloak database, or expose the Keycloak service credential to the browser.
+Temporary setup passwords exist only while processing one protected response;
+Keycloak receives them directly as temporary credentials.
 Its SMTP listener is reachable only from the private Docker network and accepts
 only Keycloak-generated identity mail for forwarding.
 
@@ -89,6 +94,7 @@ application access role is `access`.
 | `POST` | `/api/team/users` | Create one identity, assign one or more organizations, and send one invitation |
 | `PATCH` | `/api/team/users/:userId` | Update memberships, enabled state, and application access |
 | `POST` | `/api/team/users/:userId/resend` | Resend one pending identity invitation |
+| `POST` | `/api/team/users/:userId/setup-password` | Generate and display once a temporary password for a pending identity |
 | `DELETE` | `/api/team/users/:userId` | Permanently remove an identity from the platform; ngenious administrators only |
 | `GET` | `/api/organizations` | Organizations permitted to the administrator |
 | `GET` | `/api/organizations/:id/applications` | Approved applications |
@@ -108,14 +114,15 @@ npm run check
 ```
 
 The checked-in tests use an in-memory Keycloak substitute and never create
-users or send email. The suite currently covers 60 workflow, invitation-relay,
+users or send email. The suite currently covers 65 workflow, invitation-relay,
 authorization, request-security, session, and identity-token checks, including:
 
 - organization isolation and administrator-role enforcement;
 - consolidated multi-organization membership and correct Keycloak member API
   routing;
 - create, duplicate, automatic pending-user resend, manual resend, rollback,
-  enable/disable, administrator-only deletion, and application-access behavior;
+  enable/disable, temporary-password fallback, administrator-only deletion,
+  and application-access behavior;
 - authentication, CSRF, request parsing and size limits, logout, safe errors,
   and browser security headers; and
 - encrypted expiring invitation storage, MIME parsing, raw-action replacement,

@@ -150,6 +150,13 @@
         <legend>Applications</legend>
         <div class="application-options" id="edit-application-options"></div>
       </fieldset>
+      <section class="manage-action" id="manage-setup-section" aria-label="Setup password" hidden>
+        <div>
+          <strong>Setup password</strong>
+          <p>Use this fallback when the invitation email cannot be delivered.</p>
+        </div>
+        <button class="button secondary" id="manage-setup-button" type="button">Generate setup password</button>
+      </section>
       <section class="manage-delete" id="manage-delete-section" aria-label="Delete account" hidden>
         <div>
           <strong>Delete account</strong>
@@ -161,6 +168,43 @@
       <div class="dialog-actions">
         <button class="button secondary" type="button" data-close-dialog="access-dialog">Cancel</button>
         <button class="button primary" id="save-access-button" type="submit">Save access</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="confirmation-dialog" id="setup-password-dialog" aria-labelledby="setup-password-title">
+    <form>
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">Email fallback</p>
+          <h2 id="setup-password-title">Generate a setup password?</h2>
+        </div>
+        <button class="icon-button" type="button" data-close-dialog="setup-password-dialog" aria-label="Close">×</button>
+      </div>
+      <p class="dialog-intro">This replaces any previous password. The team member must change it when they first sign in.</p>
+      <div class="form-error" id="setup-password-error" role="alert" hidden></div>
+      <div class="dialog-actions">
+        <button class="button secondary" type="button" data-close-dialog="setup-password-dialog">Cancel</button>
+        <button class="button primary" id="confirm-setup-password-button" type="button">Generate password</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="confirmation-dialog" id="setup-password-result-dialog" aria-labelledby="setup-password-result-title">
+    <form>
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">Temporary password</p>
+          <h2 id="setup-password-result-title">Share this password securely</h2>
+        </div>
+      </div>
+      <p class="dialog-intro">It is shown only once. Send it through a separate trusted channel such as a phone call or Teams.</p>
+      <label>Setup password
+        <input class="password-result" id="setup-password-result" type="text" readonly autocomplete="off" spellcheck="false">
+      </label>
+      <div class="dialog-actions">
+        <button class="button secondary" id="copy-setup-password-button" type="button">Copy password</button>
+        <button class="button primary" type="button" data-close-dialog="setup-password-result-dialog">Done</button>
       </div>
     </form>
   </dialog>
