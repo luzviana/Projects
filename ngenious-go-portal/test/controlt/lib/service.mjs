@@ -23,12 +23,8 @@ function stringArray(value, field) {
 
 function statusOf(user) {
   if (user.enabled === false) return "Disabled";
-  const setupMethod = attributeValues(user.attributes, "ngenious.setupMethod")[0];
-  if (setupMethod === "temporary-password") {
-    const requiredActions = Array.isArray(user.requiredActions) ? user.requiredActions : [];
-    return requiredActions.includes("UPDATE_PASSWORD") ? "Pending" : "Active";
-  }
-  return user.emailVerified ? "Active" : "Pending";
+  const requiredActions = Array.isArray(user.requiredActions) ? user.requiredActions : [];
+  return requiredActions.includes("UPDATE_PASSWORD") ? "Pending" : "Active";
 }
 
 function audit(event) {

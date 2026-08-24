@@ -33,7 +33,7 @@ function fakeKeycloak(overrides = {}) {
     removeClientRole: async (...args) => calls.push(["removeClientRole", ...args]),
     sendSetupEmail: async (...args) => calls.push(["sendSetupEmail", ...args]),
     deleteUser: async (...args) => calls.push(["deleteUser", ...args]),
-    getUser: async (id) => ({ id, username: "person@example.com", email: "person@example.com", enabled: true, emailVerified: false }),
+    getUser: async (id) => ({ id, username: "person@example.com", email: "person@example.com", enabled: true, emailVerified: false, requiredActions: ["UPDATE_PASSWORD"] }),
     updateUser: async (...args) => calls.push(["updateUser", ...args]),
     setTemporaryPassword: async (...args) => calls.push(["setTemporaryPassword", ...args]),
     ...overrides,
@@ -176,6 +176,7 @@ test("adding an existing pending team member sends a new setup invitation", asyn
   const keycloak = fakeKeycloak({
     findUserByEmail: async () => ({
       id: "existing", email: "person@example.com", enabled: true, emailVerified: false,
+      requiredActions: ["UPDATE_PASSWORD"],
     }),
     userOrganizations: async () => [],
   });
@@ -280,7 +281,7 @@ test("customer administrators with ambiguous organization membership are denied"
 });
 
 test("an existing pending member is directed to resend without recreation", async () => {
-  const keycloak = fakeKeycloak({ findUserByEmail: async () => ({ id: "existing", emailVerified: false }) });
+  const keycloak = fakeKeycloak({ findUserByEmail: async () => ({ id: "existing", emailVerified: false, requiredActions: ["UPDATE_PASSWORD"] }) });
   const service = new ControlTService(config, keycloak);
   await assert.rejects(() => service.createAndInvite(internal, "org-a", {
     email: "person@example.com", firstName: "Person", lastName: "Example", applications: [],
@@ -323,7 +324,7 @@ test("a pending team member receives a strong temporary setup password", async (
   const keycloak = fakeKeycloak({
     getUser: async () => ({
       id: "pending", email: "pending@example.com", enabled: true, emailVerified: false,
-      requiredActions: ["VERIFY_EMAIL", "UPDATE_PROFILE"],
+      requiredActions: ["VERIFY_EMAIL", "UPDATE_PROFILE", "UPDATE_PASSWORD"],
     }),
   });
   const result = await new ControlTService(config, keycloak).generateSetupPassword(internal, "pending");
@@ -415,8 +416,8 @@ test("an internal administrator cannot delete their own account", async () => {
 
 test("member status distinguishes setup completion from email verification", async () => {
   const users = {
-    pending: { id: "pending", email: "p@example.com", enabled: true, emailVerified: false, attributes: { "ngenious.setupMethod": ["temporary-password"] }, requiredActions: ["UPDATE_PASSWORD"] },
-    fallbackActive: { id: "fallbackActive", email: "fallback@example.com", enabled: true, emailVerified: false, attributes: { "ngenious.setupMethod": ["temporary-password"] }, requiredActions: [] },
+    pending: { id: "pending", email: "p@example.com", enabled: true, emailVerified: false, requiredActions: ["UPDATE_PASSWORD"] },
+    setupComplete: { id: "setupComplete", email: "complete@example.com", enabled: true, emailVerified: false, requiredActions: [] },
     active: { id: "active", email: "a@example.com", enabled: true, emailVerified: true },
     disabled: { id: "disabled", email: "d@example.com", enabled: false, emailVerified: true },
   };
