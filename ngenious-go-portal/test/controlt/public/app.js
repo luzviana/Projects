@@ -1,4 +1,4 @@
-const state = { session: null, csrf: null, mode: null, organizations: [], applications: [], members: [], editingMember: null, deletingMember: null };
+const state = { session: null, csrf: null, mode: null, organizations: [], applications: [], members: [], editingMember: null, deletingMember: null, addUserDirty: false };
 const byId = (id) => document.getElementById(id);
 const elements = Object.fromEntries([
   "signin-panel", "workspace", "loading-panel", "user-menu", "user-menu-button", "user-menu-popover",
@@ -9,7 +9,8 @@ const elements = Object.fromEntries([
   "add-application-options", "add-user-error", "create-user-button", "access-dialog", "access-form",
   "access-user", "edit-organization-fieldset", "edit-organization-options", "edit-application-options",
   "access-error", "save-access-button", "manage-delete-section", "manage-delete-button",
-  "delete-user-dialog", "delete-user-form", "delete-user-name",
+  "delete-user-dialog", "delete-user-form", "delete-user-name", "discard-user-dialog",
+  "confirm-discard-user-button",
   "delete-user-organizations", "delete-user-error", "confirm-delete-user-button", "toast",
 ].map((id) => [id, byId(id)]));
 
@@ -152,6 +153,7 @@ function prepareOrganizationOptions(container, chosen) {
 
 function openAddUser() {
   elements["add-user-form"].reset(); elements["add-user-error"].hidden = true;
+  state.addUserDirty = false;
   const organizationIds = state.mode === "internal" ? [] : [state.organizations[0].id];
   prepareOrganizationOptions(elements["add-organization-options"], organizationIds);
   syncApplicationOptions(elements["add-organization-options"], elements["add-application-options"]);
@@ -191,7 +193,7 @@ async function submitAddUser(event) {
   const form = new FormData(elements["add-user-form"]); const organizationIds = state.mode === "internal" ? selected(elements["add-organization-options"], "organizations") : [state.organizations[0].id];
   try {
     const result = await api("/api/team/users", { method: "POST", body: { firstName: form.get("firstName"), lastName: form.get("lastName"), email: form.get("email"), organizationIds, applications: selected(elements["add-application-options"], "applications") } });
-    elements["add-user-dialog"].close(); toast(result.user.invitationSent ? `Invitation sent to ${form.get("email")}.` : `${form.get("email")} was added to the selected organizations.`); await loadTeam();
+    state.addUserDirty = false; elements["add-user-dialog"].close(); toast(result.user.invitationSent ? `Invitation sent to ${form.get("email")}.` : `${form.get("email")} was added to the selected organizations.`); await loadTeam();
   } catch (error) { setFormError(elements["add-user-error"], error); } finally { elements["create-user-button"].disabled = false; }
 }
 
@@ -240,13 +242,29 @@ elements["sign-out-button"].addEventListener("click", async () => { try { const 
 elements["member-search"].addEventListener("input", renderMembers);
 elements["add-user-button"].addEventListener("click", openAddUser);
 elements["add-user-form"].addEventListener("submit", submitAddUser);
+elements["add-user-form"].addEventListener("input", () => { state.addUserDirty = true; });
+elements["add-user-form"].addEventListener("change", () => { state.addUserDirty = true; });
 elements["access-form"].addEventListener("submit", submitAccess);
 elements["manage-delete-button"].addEventListener("click", openManagedDelete);
 elements["delete-user-form"].addEventListener("submit", submitDeleteUser);
 elements["add-organization-options"].addEventListener("change", () => syncApplicationOptions(elements["add-organization-options"], elements["add-application-options"], selected(elements["add-application-options"], "applications")));
 elements["edit-organization-options"].addEventListener("change", () => syncApplicationOptions(elements["edit-organization-options"], elements["edit-application-options"], selected(elements["edit-application-options"], "applications")));
 elements["retry-button"].addEventListener("click", loadTeam);
-for (const button of document.querySelectorAll("[data-close-dialog]")) button.addEventListener("click", () => byId(button.dataset.closeDialog).close());
-for (const dialog of document.querySelectorAll("dialog")) dialog.addEventListener("click", (event) => { const bounds = dialog.getBoundingClientRect(); if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) dialog.close(); });
+function requestDialogClose(dialog) {
+  if (dialog === elements["add-user-dialog"] && state.addUserDirty) {
+    elements["discard-user-dialog"].showModal();
+    elements["confirm-discard-user-button"].focus();
+    return;
+  }
+  dialog.close();
+}
+
+for (const button of document.querySelectorAll("[data-close-dialog]")) button.addEventListener("click", () => requestDialogClose(byId(button.dataset.closeDialog)));
+elements["add-user-dialog"].addEventListener("cancel", (event) => { event.preventDefault(); requestDialogClose(elements["add-user-dialog"]); });
+elements["confirm-discard-user-button"].addEventListener("click", () => {
+  state.addUserDirty = false;
+  elements["discard-user-dialog"].close();
+  elements["add-user-dialog"].close();
+});
 
 initialize();

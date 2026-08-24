@@ -114,6 +114,23 @@
     </form>
   </dialog>
 
+  <dialog class="confirmation-dialog" id="discard-user-dialog" aria-labelledby="discard-user-title">
+    <form>
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">Unsaved changes</p>
+          <h2 id="discard-user-title">Discard this team member?</h2>
+        </div>
+        <button class="icon-button" type="button" data-close-dialog="discard-user-dialog" aria-label="Close">×</button>
+      </div>
+      <p class="dialog-intro">The information entered in the form has not been saved.</p>
+      <div class="dialog-actions">
+        <button class="button secondary" type="button" data-close-dialog="discard-user-dialog">Keep editing</button>
+        <button class="button danger solid" id="confirm-discard-user-button" type="button">Discard changes</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="access-dialog" aria-labelledby="access-title">
     <form id="access-form">
       <div class="dialog-header">

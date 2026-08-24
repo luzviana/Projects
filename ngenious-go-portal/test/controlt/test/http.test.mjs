@@ -160,6 +160,17 @@ await test("serves the packaged ngenious logo and robot favicon", async () => {
   assert.ok(favicon.body.length > 100);
 });
 
+await test("protects the add-member form from accidental dismissal", async () => {
+  const { handler, authHeaders } = harness();
+  const page = await invoke(handler, { url: "/", headers: authHeaders });
+  const script = await invoke(handler, { url: "/assets/app.js" });
+  assert.match(page.body, /Discard this team member\?/);
+  assert.match(page.body, /The information entered in the form has not been saved\./);
+  assert.match(script.body, /addUserDirty/);
+  assert.match(script.body, /discard-user-dialog/);
+  assert.doesNotMatch(script.body, /getBoundingClientRect/);
+});
+
 await test("serves a scanner-safe invitation page without exposing the Keycloak token", async () => {
   const { handler, invitationCode, invitationActionUrl } = harness();
   const res = await invoke(handler, { url: `/invite/${invitationCode}` });
