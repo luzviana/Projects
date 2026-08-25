@@ -24,7 +24,7 @@ function stringArray(value, field) {
 function statusOf(user) {
   if (user.enabled === false) return "Disabled";
   const requiredActions = Array.isArray(user.requiredActions) ? user.requiredActions : [];
-  return requiredActions.includes("UPDATE_PASSWORD") ? "Pending" : "Active";
+  return requiredActions.includes("UPDATE_PASSWORD") || user.hasPasswordCredential === false ? "Pending" : "Active";
 }
 
 function audit(event) {
@@ -239,6 +239,7 @@ export class ControlTService {
       const now = new Date().toISOString();
       userId = await this.keycloak.createUser({
         username: email, email, firstName, lastName, enabled: true, emailVerified: false,
+        requiredActions: ["UPDATE_PASSWORD"],
         attributes: {
           "ngenious.invitedAt": [now],
           "ngenious.invitedBy": [session.sub],
@@ -406,6 +407,7 @@ export class ControlTService {
         lastName,
         enabled: true,
         emailVerified: false,
+        requiredActions: ["UPDATE_PASSWORD"],
         attributes: {
           "ngenious.invitedAt": [now],
           "ngenious.invitedBy": [session.sub],

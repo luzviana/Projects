@@ -84,11 +84,23 @@ export class KeycloakAdmin {
 
   async findUserByEmail(email) {
     const matches = await this.request(`/users?exact=true&username=${encodeURIComponent(email)}&max=2`);
-    return matches.find((user) => user.username?.toLowerCase() === email) || null;
+    const match = matches.find((user) => user.username?.toLowerCase() === email);
+    return match ? this.getUser(match.id) : null;
   }
 
-  getUser(userId) {
-    return this.request(`/users/${encodeURIComponent(userId)}`);
+  async getUser(userId) {
+    const [user, credentials] = await Promise.all([
+      this.request(`/users/${encodeURIComponent(userId)}`),
+      this.userCredentials(userId),
+    ]);
+    return {
+      ...user,
+      hasPasswordCredential: credentials.some((credential) => credential.type === "password"),
+    };
+  }
+
+  userCredentials(userId) {
+    return this.request(`/users/${encodeURIComponent(userId)}/credentials`);
   }
 
   async createUser(user, retry = true) {

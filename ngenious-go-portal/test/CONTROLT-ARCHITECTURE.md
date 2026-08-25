@@ -246,7 +246,10 @@ invitation; they do not show Keycloak's generic **Back to application** link.
 
 **Not signed in yet** means the person has not completed their initial password
 action and first sign-in. It is the only setup notification shown to an
-administrator. The interface does not expose email-verification flags, required-action lists,
+administrator. Control determines this from Keycloak's password credential and
+forced password-change state, including for accounts created before this UI.
+New invitations persist the forced password action until setup is completed.
+The interface does not expose email-verification flags, required-action lists,
 credentials, OTP, WebAuthn, groups, raw roles, realm configuration, clients, or
 authentication flows. MFA and passwordless administration are outside the
 current PoC.

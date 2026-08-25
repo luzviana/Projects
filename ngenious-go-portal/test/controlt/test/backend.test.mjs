@@ -123,6 +123,27 @@ test("Keycloak temporary passwords use the credential reset endpoint", async () 
   assert.deepEqual(JSON.parse(requests[0][1].body), { type: "password", value: "Test-password-42!", temporary: true });
 });
 
+test("Keycloak users include durable password-credential readiness", async () => {
+  const requested = [];
+  const client = new KeycloakAdmin({
+    keycloakInternalUrl: "http://keycloak:8080",
+    realm: "go-portal-test",
+    serviceClientId: "controlt-service",
+    serviceClientSecret: "secret",
+  }, async (url) => {
+    if (url.endsWith("/protocol/openid-connect/token")) {
+      return new Response(JSON.stringify({ access_token: "token", expires_in: 60 }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    requested.push(url);
+    const body = url.endsWith("/credentials") ? [{ type: "password" }] : { id: "person-1", enabled: true };
+    return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+  });
+  const user = await client.getUser("person / one");
+  assert.equal(user.hasPasswordCredential, true);
+  assert.equal(requested[0], "http://keycloak:8080/admin/realms/go-portal-test/users/person%20%2F%20one");
+  assert.equal(requested[1], "http://keycloak:8080/admin/realms/go-portal-test/users/person%20%2F%20one/credentials");
+});
+
 test("internal Team view shows a multi-organization person only once", async () => {
   const organizations = [
     { id: "org-a", name: "Alpha", attributes: { "ngenious.allowedApplications": ["app-a"] } },
@@ -236,6 +257,7 @@ test("create and invite never handles a password and assigns only allowed access
   assert.equal(result.status, "Pending");
   const create = keycloak.calls.find(([name]) => name === "createUser")[1];
   assert.equal("credentials" in create, false);
+  assert.deepEqual(create.requiredActions, ["UPDATE_PASSWORD"]);
   assert.deepEqual(keycloak.calls.map(([name]) => name), ["createUser", "addOrganizationMember", "addClientRole", "sendSetupEmail"]);
 });
 
@@ -417,8 +439,8 @@ test("an internal administrator cannot delete their own account", async () => {
 test("member status exposes access readiness without email verification", async () => {
   const users = {
     pending: { id: "pending", email: "p@example.com", enabled: true, emailVerified: false, requiredActions: ["UPDATE_PASSWORD"] },
-    setupComplete: { id: "setupComplete", email: "complete@example.com", enabled: true, emailVerified: false, requiredActions: [] },
-    active: { id: "active", email: "a@example.com", enabled: true, emailVerified: true },
+    noPassword: { id: "noPassword", email: "no-password@example.com", enabled: true, requiredActions: [], hasPasswordCredential: false },
+    active: { id: "active", email: "a@example.com", enabled: true, requiredActions: [], hasPasswordCredential: true },
     disabled: { id: "disabled", email: "d@example.com", enabled: false, emailVerified: true },
   };
   const keycloak = fakeKeycloak({
@@ -427,7 +449,7 @@ test("member status exposes access readiness without email verification", async 
   });
   const service = new ControlTService(config, keycloak);
   const members = await service.listMembers(internal, "org-a");
-  assert.deepEqual(members.map(({ status }) => status), ["Pending", "Active", "Active", "Disabled"]);
+  assert.deepEqual(members.map(({ status }) => status), ["Pending", "Pending", "Active", "Disabled"]);
   assert.ok(members.every((member) => !("emailVerified" in member)));
 });
 

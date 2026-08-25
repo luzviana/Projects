@@ -45,7 +45,9 @@ organization, so organization controls are not shown to them.
   password, displays it once to the administrator, and requires the member to
   replace it at first sign-in; before that step the Team page shows **Not signed
   in yet**, and after it the account is **Active**; email-verification state is
-  not exposed to administrators;
+  not exposed to administrators. The status uses the presence of a Keycloak
+  password credential plus the forced password-change action, so legacy
+  credentialless accounts remain eligible for a setup password;
 - let only an ngenious administrator permanently delete an identity, with an
   explicit organization-impact confirmation in the interface; and
 - write structured audit events without credentials or action links.
