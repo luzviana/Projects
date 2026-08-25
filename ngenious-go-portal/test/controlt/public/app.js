@@ -7,10 +7,10 @@ const elements = Object.fromEntries([
   "member-search", "result-count", "member-list", "empty-state", "empty-title", "empty-copy",
   "add-user-dialog", "add-user-form", "add-organization-fieldset", "add-organization-options",
   "add-application-options", "add-user-error", "create-user-button", "access-dialog", "access-form",
-  "access-user", "edit-organization-fieldset", "edit-organization-options", "edit-application-options",
+  "access-title", "access-user-name", "access-user-email", "edit-organization-fieldset", "edit-organization-options", "edit-application-options",
   "access-error", "save-access-button", "manage-delete-section", "manage-delete-button",
   "manage-setup-section", "manage-setup-button", "setup-password-dialog", "setup-password-error",
-  "confirm-setup-password-button", "setup-password-result-dialog", "setup-password-result",
+  "setup-password-user-name", "setup-password-user-email", "confirm-setup-password-button", "setup-password-result-dialog", "setup-password-result",
   "copy-setup-password-button",
   "delete-user-dialog", "delete-user-form", "delete-user-name", "discard-user-dialog",
   "confirm-discard-user-button",
@@ -170,7 +170,10 @@ function openAddUser() {
 
 function openAccess(member) {
   state.editingMember = member; elements["access-error"].hidden = true;
-  elements["access-user"].textContent = `Manage organizations and applications for ${`${member.firstName} ${member.lastName}`.trim() || member.email}.`;
+  const memberName = `${member.firstName} ${member.lastName}`.trim() || member.email;
+  elements["access-title"].textContent = `Manage ${memberName}`;
+  elements["access-user-name"].textContent = memberName;
+  elements["access-user-email"].textContent = member.email;
   elements["manage-setup-section"].hidden = member.status !== "Pending";
   elements["manage-delete-section"].hidden = state.mode !== "internal" || member.id === state.session.user.sub;
   prepareOrganizationOptions(elements["edit-organization-options"], member.organizationIds);
@@ -187,6 +190,9 @@ function openManagedDelete() {
 
 function openSetupPassword() {
   if (!state.editingMember) return;
+  const member = state.editingMember;
+  elements["setup-password-user-name"].textContent = `${member.firstName} ${member.lastName}`.trim() || member.email;
+  elements["setup-password-user-email"].textContent = member.email;
   elements["setup-password-error"].hidden = true;
   elements["setup-password-dialog"].showModal();
 }
