@@ -7,7 +7,7 @@ const elements = Object.fromEntries([
   "member-search", "result-count", "member-list", "empty-state", "empty-title", "empty-copy",
   "add-user-dialog", "add-user-form", "add-organization-fieldset", "add-organization-options",
   "add-application-options", "add-user-error", "create-user-button", "access-dialog", "access-form",
-  "access-title", "access-user-name", "access-user-email", "edit-organization-fieldset", "edit-organization-options", "edit-application-options",
+  "access-user-name", "access-user-email", "edit-organization-fieldset", "edit-organization-options", "edit-application-options",
   "access-error", "save-access-button", "manage-delete-section", "manage-delete-button",
   "manage-setup-section", "manage-setup-button", "setup-password-dialog", "setup-password-error",
   "setup-password-user-name", "setup-password-user-email", "confirm-setup-password-button", "setup-password-result-dialog", "setup-password-result",
@@ -171,7 +171,6 @@ function openAddUser() {
 function openAccess(member) {
   state.editingMember = member; elements["access-error"].hidden = true;
   const memberName = `${member.firstName} ${member.lastName}`.trim() || member.email;
-  elements["access-title"].textContent = `Manage ${memberName}`;
   elements["access-user-name"].textContent = memberName;
   elements["access-user-email"].textContent = member.email;
   elements["manage-setup-section"].hidden = member.status !== "Pending";
