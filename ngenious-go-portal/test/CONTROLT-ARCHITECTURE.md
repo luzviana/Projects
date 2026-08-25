@@ -87,6 +87,11 @@ extracts and validates the Keycloak action URL, stores it encrypted with a
 message through the Postmark HTTPS API. Control never generates the identity
 action and Postmark never receives the raw Keycloak token.
 
+The Control container uses the host's non-loopback DNS resolver for outbound
+lookups. Deployment must prove that the container can resolve and connect to
+the Postmark HTTPS endpoint before the new release is accepted. A failed check
+automatically restores the previous Control release.
+
 ### Caddy
 
 Caddy is the existing HTTPS web gateway, equivalent in purpose to Nginx or an

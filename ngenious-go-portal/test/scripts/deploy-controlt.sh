@@ -13,6 +13,13 @@ CONTAINER=controlt
 BACKUP_CONTAINER=controlt-pre-deploy
 NODE_IMAGE=docker.io/library/node:22-alpine
 
+resolver_config=/run/systemd/resolve/resolv.conf
+if [[ ! -r "$resolver_config" ]]; then
+  resolver_config=/etc/resolv.conf
+fi
+controlt_dns=$(awk '$1 == "nameserver" && $2 !~ /^127\./ { print $2; exit }' "$resolver_config")
+test -n "$controlt_dns"
+
 test -s "$STAGED_APP/server.mjs"
 test -s "$STAGED_APP/package.json"
 test -s "$STAGED_CADDYFILE"
@@ -120,6 +127,7 @@ docker run -d \
   --memory 192m \
   --cpus 0.25 \
   --network go-portal \
+  --dns "$controlt_dns" \
   --publish 127.0.0.1:3100:3100 \
   --read-only \
   --tmpfs /tmp:rw,noexec,nosuid,size=16m \
@@ -146,6 +154,10 @@ for attempt in $(seq 1 30); do
   sleep 1
 done
 test "$ready" = true
+
+docker exec "$CONTAINER" node -e \
+  'fetch("https://api.postmarkapp.com/email", { method: "OPTIONS", signal: AbortSignal.timeout(10000) }).then(response => { console.log(response.status); }).catch(error => { console.error(error); process.exit(1); })' \
+  >/dev/null
 
 install -o root -g root -m 0640 "$STAGED_CADDYFILE" "$CADDYFILE"
 docker restart caddy >/dev/null
@@ -184,4 +196,5 @@ if [[ "$had_previous" == true ]]; then
 fi
 printf 'ControlT deployed from %s without restarting Keycloak.\n' "$release"
 printf 'Automatic authentication redirect and protected API boundary verified.\n'
+printf 'Outbound Postmark connectivity verified.\n'
 printf 'Scanner-safe invitation route verified at id.ngenious.app.\n'

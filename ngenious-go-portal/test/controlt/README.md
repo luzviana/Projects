@@ -136,3 +136,5 @@ authorization, request-security, session, and identity-token checks, including:
 
 These automated checks are the pre-deployment gate. The deployed end-to-end
 test with Keycloak and actual email delivery is a separate acceptance step.
+The production deployment also verifies outbound Postmark connectivity from
+inside the Control container and rolls back if that check fails.
