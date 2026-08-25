@@ -360,8 +360,7 @@ test("a pending team member receives a strong temporary setup password", async (
   assert.equal(keycloak.calls[1][0], "updateUser");
   assert.equal(keycloak.calls[1][1], "pending");
   assert.deepEqual(keycloak.calls[1][2].requiredActions, ["UPDATE_PROFILE", "UPDATE_PASSWORD"]);
-  assert.deepEqual(keycloak.calls[1][2].attributes["ngenious.setupMethod"], ["temporary-password"]);
-  assert.equal(Number.isNaN(Date.parse(keycloak.calls[1][2].attributes["ngenious.setupPasswordIssuedAt"][0])), false);
+  assert.equal("attributes" in keycloak.calls[1][2], false);
 });
 
 test("setup passwords are refused for active and disabled team members", async () => {

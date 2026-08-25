@@ -334,11 +334,6 @@ export class ControlTService {
       ])];
       await this.keycloak.updateUser(userId, {
         requiredActions,
-        attributes: {
-          ...(user.attributes || {}),
-          "ngenious.setupMethod": ["temporary-password"],
-          "ngenious.setupPasswordIssuedAt": [new Date().toISOString()],
-        },
       });
       audit({ outcome: "success", operation: "generate_setup_password", actor: session.sub, target: userId });
       return { id: userId, email: user.email || user.username, setupPassword: password, temporary: true };

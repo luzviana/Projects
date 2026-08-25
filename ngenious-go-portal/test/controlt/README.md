@@ -41,7 +41,7 @@ organization, so organization controls are not shown to them.
 - automatically send a fresh setup email when an existing pending identity is
   added, safely resend pending invitations, enable or disable members, and
   update approved application access;
-- provide a pending-account fallback that generates a strong temporary
+- provide a pending-account option that generates a strong temporary
   password, displays it once to the administrator, and requires the member to
   replace it at first sign-in; before that step the Team page shows **Not signed
   in yet**, and after it the account is **Active**; email-verification state is
@@ -125,7 +125,7 @@ authorization, request-security, session, and identity-token checks, including:
 - consolidated multi-organization membership and correct Keycloak member API
   routing;
 - create, duplicate, automatic pending-user resend, manual resend, rollback,
-  enable/disable, temporary-password fallback, administrator-only deletion,
+  enable/disable, temporary-password setup, administrator-only deletion,
   and application-access behavior;
 - authentication, CSRF, request parsing and size limits, logout, safe errors,
   and browser security headers; and

@@ -52,7 +52,7 @@ ControlT is an administration facade over supported Keycloak APIs. It owns:
 ControlT must never store or log passwords, validate them itself, issue identity
 tokens, implement login, or reproduce Keycloak authentication flows. It may
 generate a temporary setup password in memory and submit it directly to
-Keycloak when an administrator explicitly uses the delivery fallback.
+Keycloak when an administrator explicitly chooses temporary-password setup.
 
 ## Components
 
@@ -201,7 +201,7 @@ memberships or roles.
 - ControlT never deletes and recreates an existing identity merely to resend an
   invitation.
 
-### Setup-password fallback
+### Temporary setup password
 
 If an invitation cannot be delivered, an authorized administrator may generate
 a strong temporary setup password for an enabled, pending member. Control sends
