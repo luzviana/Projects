@@ -4,7 +4,9 @@ set -euo pipefail
 REALM=go-portal-test
 ADMIN_SECRET=ngenious-go-portal/test/bootstrap-admin
 KEYCLOAK_CONTAINER=keycloak
-THEME=ngenious-go
+CLIENT_ID=ngenious-oidc-test-app
+TESTER_EMAIL=oidc.tester@example.invalid
+ORGANIZATION_ALIAS=prototype-alpha
 
 ADMIN_JSON=$(aws secretsmanager get-secret-value \
   --region us-east-1 \
@@ -65,7 +67,7 @@ cleanup_recovery_admin() {
 
 if ! authenticate_admin "$ADMIN_USER" "$ADMIN_PASSWORD"; then
   printf 'Bootstrap administrator is unavailable; creating a local temporary recovery administrator.\n'
-  RECOVERY_ADMIN_USER="theme-config-$(openssl rand -hex 6)"
+  RECOVERY_ADMIN_USER="account-overview-$(openssl rand -hex 6)"
   RECOVERY_ADMIN_PASSWORD="Ngr!2026-$(openssl rand -hex 16)"
   keycloak_image_id=$(docker inspect "$KEYCLOAK_CONTAINER" --format '{{.Image}}')
 
@@ -91,20 +93,38 @@ fi
 
 unset ADMIN_JSON ADMIN_USER ADMIN_PASSWORD
 
-kc update "realms/$REALM" \
-    -s "loginTheme=$THEME" \
-    -s "accountTheme=$THEME" \
-    -s "emailTheme=$THEME" \
-    -s 'displayName=ngenious Account'
+client_uuid=$(kc get clients -r "$REALM" \
+  -q clientId="$CLIENT_ID" --fields id,clientId | jq -er '.[0].id')
+kc update "clients/$client_uuid" -r "$REALM" \
+  -s 'name=ngenious Go Test' \
+  -s 'description=Protected authentication test application' \
+  -s 'rootUrl=https://got.ngenious.app' \
+  -s 'baseUrl=/' \
+  -s alwaysDisplayInConsole=true
 
-ACTIVE_THEMES=$(kc get "realms/$REALM" \
-    --fields loginTheme,accountTheme,emailTheme,displayName)
+organization_id=$(kc get organizations -r "$REALM" --fields id,alias \
+  | jq -er --arg alias "$ORGANIZATION_ALIAS" \
+    '.[] | select(.alias == $alias) | .id')
+tester_id=$(kc get users -r "$REALM" \
+  -q exact=true -q username="$TESTER_EMAIL" \
+  --fields id,username | jq -er '.[0].id')
 
-test "$(printf '%s' "$ACTIVE_THEMES" | jq -r .loginTheme)" = "$THEME"
-test "$(printf '%s' "$ACTIVE_THEMES" | jq -r .accountTheme)" = "$THEME"
-test "$(printf '%s' "$ACTIVE_THEMES" | jq -r .emailTheme)" = "$THEME"
-test "$(printf '%s' "$ACTIVE_THEMES" | jq -r .displayName)" = 'ngenious Account'
-printf 'Active themes: login=%s account=%s email=%s\n' \
-  "$(printf '%s' "$ACTIVE_THEMES" | jq -r .loginTheme)" \
-  "$(printf '%s' "$ACTIVE_THEMES" | jq -r .accountTheme)" \
-  "$(printf '%s' "$ACTIVE_THEMES" | jq -r .emailTheme)"
+if ! kc get "organizations/$organization_id/members" -r "$REALM" \
+  --fields id | jq -e --arg id "$tester_id" \
+  'any(.[]; .id == $id)' >/dev/null; then
+  kc create "organizations/$organization_id/members" \
+    -r "$REALM" \
+    -b "\"$tester_id\"" >/dev/null
+  printf 'Added %s to %s.\n' "$TESTER_EMAIL" "$ORGANIZATION_ALIAS"
+fi
+
+client_settings=$(kc get "clients/$client_uuid" -r "$REALM" \
+  --fields clientId,name,description,rootUrl,baseUrl,alwaysDisplayInConsole)
+test "$(printf '%s' "$client_settings" | jq -r .name)" = 'ngenious Go Test'
+test "$(printf '%s' "$client_settings" | jq -r .rootUrl)" = 'https://got.ngenious.app'
+test "$(printf '%s' "$client_settings" | jq -r .baseUrl)" = '/'
+test "$(printf '%s' "$client_settings" | jq -r .alwaysDisplayInConsole)" = true
+kc get "organizations/$organization_id/members" -r "$REALM" --fields id \
+  | jq -e --arg id "$tester_id" 'any(.[]; .id == $id)' >/dev/null
+
+printf 'Account overview data configured for %s.\n' "$TESTER_EMAIL"

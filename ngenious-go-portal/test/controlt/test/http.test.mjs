@@ -1,0 +1,400 @@
+import assert from "node:assert/strict";
+import { createRequestHandler } from "../lib/http-app.mjs";
+import { KeycloakApiError } from "../lib/keycloak.mjs";
+import { createSessionStore } from "../lib/sessions.mjs";
+import { invitationCss, invitationPage } from "../lib/invitations.mjs";
+
+let passed = 0;
+
+async function test(name, run) {
+  try {
+    await run();
+    passed += 1;
+    process.stdout.write(`ok - ${name}\n`);
+  } catch (error) {
+    process.stderr.write(`not ok - ${name}\n${error.stack}\n`);
+    process.exitCode = 1;
+  }
+}
+
+function request({ method = "GET", url = "/", headers = {}, body = "" } = {}) {
+  const chunks = body === "" ? [] : [Buffer.isBuffer(body) ? body : Buffer.from(body)];
+  return {
+    method,
+    url,
+    headers,
+    async *[Symbol.asyncIterator]() {
+      yield* chunks;
+    },
+  };
+}
+
+function response() {
+  const headers = new Map();
+  const chunks = [];
+  return {
+    statusCode: 200,
+    headersSent: false,
+    destroyed: false,
+    ended: false,
+    setHeader(name, value) { headers.set(name.toLowerCase(), value); },
+    writeHead(status, extra = {}) {
+      this.statusCode = status;
+      for (const [name, value] of Object.entries(extra)) this.setHeader(name, value);
+      this.headersSent = true;
+    },
+    end(chunk) {
+      if (chunk !== undefined) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      this.headersSent = true;
+      this.ended = true;
+    },
+    destroy() { this.destroyed = true; },
+    get headers() { return headers; },
+    get body() { return Buffer.concat(chunks).toString("utf8"); },
+    get json() { return JSON.parse(this.body); },
+  };
+}
+
+function harness() {
+  const calls = [];
+  const sessions = createSessionStore("b".repeat(64), { secure: true });
+  const created = sessions.createSession({
+    sub: "admin-1",
+    email: "admin@example.test",
+    name: "Test Admin",
+    roles: ["ngenious-admin"],
+  });
+  const authHeaders = {
+    cookie: created.cookie.split(";")[0],
+    "x-controlt-csrf": created.session.csrf,
+  };
+  const service = {
+    async sessionForAdministrator(identity) { return identity; },
+    async team(session) { calls.push(["team", session]); return { mode: "internal", organizations: [], applications: [], members: [] }; },
+    async addTeamMember(session, body) { calls.push(["addTeamMember", session, body]); return { id: "user-1", status: "Pending" }; },
+    async updateTeamMember(session, userId, body) { calls.push(["updateTeamMember", session, userId, body]); return { id: userId, ...body }; },
+    async resendTeamInvitation(session, userId) { calls.push(["resendTeamInvitation", session, userId]); return { id: userId, status: "Pending" }; },
+    async generateSetupPassword(session, userId) { calls.push(["generateSetupPassword", session, userId]); return { id: userId, setupPassword: "Temporary-password-42!", temporary: true }; },
+    async deleteTeamMember(session, userId) { calls.push(["deleteTeamMember", session, userId]); return { id: userId, deleted: true, removedFromPlatform: true }; },
+    async listOrganizations(session) { calls.push(["listOrganizations", session]); return [{ id: "org-1", name: "Example" }]; },
+    async listApplications(session, organizationId) { calls.push(["listApplications", session, organizationId]); return []; },
+    async listMembers(session, organizationId) { calls.push(["listMembers", session, organizationId]); return []; },
+    async createAndInvite(session, organizationId, body) { calls.push(["createAndInvite", session, organizationId, body]); return { id: "user-1", status: "invited" }; },
+    async resendInvitation(session, organizationId, userId) { calls.push(["resendInvitation", session, organizationId, userId]); return { id: userId, status: "invited" }; },
+    async updateMember(session, organizationId, userId, body) { calls.push(["updateMember", session, organizationId, userId, body]); return { id: userId, ...body }; },
+  };
+  const oidc = {
+    async createAuthorization() { return { url: "https://id.example.test/authorize", flow: { state: "state-1", verifier: "verifier-1" } }; },
+    async exchange() { return { sub: "admin-2", email: "second@example.test", name: "Second Admin", roles: ["ngenious-admin"] }; },
+    async logoutUrl() { return "https://id.example.test/logout"; },
+  };
+  const errors = [];
+  const invitationCode = "A".repeat(22);
+  const invitationActionUrl = "https://id.ngenious.app/realms/go-portal-test/login-actions/action-token?key=private-keycloak-token";
+  const invitations = {
+    async resolve(code) { return code === invitationCode ? { actionUrl: invitationActionUrl, expiresAt: Date.now() + 60_000 } : null; },
+    confirmation(code) { return `confirmation-${code}`; },
+    verifyConfirmation(code, supplied) { return code === invitationCode && supplied === `confirmation-${code}`; },
+  };
+  const handler = createRequestHandler({
+    config: { publicOrigin: "https://controlt.ngenious.app", postLoginPath: "/" },
+    sessions,
+    oidc,
+    service,
+    invitations,
+    invitationPage,
+    invitationCss,
+    logError: (record) => errors.push(record),
+  });
+  return { handler, sessions, service, oidc, calls, errors, authHeaders, created, invitationCode, invitationActionUrl };
+}
+
+async function invoke(handler, options) {
+  const res = response();
+  await handler(request(options), res);
+  return res;
+}
+
+await test("redirects an unauthenticated root request directly to sign-in", async () => {
+  const { handler } = harness();
+  const res = await invoke(handler, { url: "/" });
+  assert.equal(res.statusCode, 302);
+  assert.equal(res.headers.get("location"), "https://id.example.test/authorize");
+  assert.match(res.headers.get("set-cookie")[0], /^controlt_oidc=/);
+  assert.match(res.headers.get("set-cookie")[0], /HttpOnly/);
+  assert.match(res.headers.get("set-cookie")[0], /Secure/);
+  assert.match(res.headers.get("content-security-policy"), /frame-ancestors 'none'/);
+  assert.equal(res.headers.get("x-frame-options"), "DENY");
+  assert.equal(res.headers.get("cache-control"), "no-store");
+  assert.ok(res.headers.get("x-request-id"));
+});
+
+await test("serves the application to an authenticated administrator", async () => {
+  const { handler, authHeaders } = harness();
+  const res = await invoke(handler, { url: "/", headers: authHeaders });
+  assert.equal(res.statusCode, 200);
+  assert.match(res.body, /<!doctype html>/i);
+  assert.match(res.body, /Control administration/);
+  assert.match(res.body, />Team</);
+  assert.match(res.body, /Add team member/);
+  assert.match(res.body, /Delete account/);
+  assert.match(res.body, /Generate setup password/);
+  assert.match(res.body, /shown only once/);
+  assert.match(res.body, /Remove from platform/);
+  assert.match(res.body, /Manage my account/);
+  assert.match(res.body, /https:\/\/id\.ngenious\.app\/realms\/go-portal-test\/account\//);
+  assert.doesNotMatch(res.body, />People</);
+  assert.doesNotMatch(res.body, /ControlT/);
+  assert.match(res.headers.get("content-security-policy"), /frame-ancestors 'none'/);
+  assert.equal(res.headers.get("x-frame-options"), "DENY");
+  assert.equal(res.headers.get("cache-control"), "no-store");
+  assert.ok(res.headers.get("x-request-id"));
+});
+
+await test("serves the packaged ngenious logo and robot favicon", async () => {
+  const { handler } = harness();
+  const logo = await invoke(handler, { url: "/assets/ngenious-logo.png" });
+  const favicon = await invoke(handler, { url: "/favicon.ico" });
+  assert.equal(logo.statusCode, 200);
+  assert.equal(logo.headers.get("content-type"), "image/png");
+  assert.ok(logo.body.length > 100);
+  assert.equal(favicon.statusCode, 200);
+  assert.equal(favicon.headers.get("content-type"), "image/x-icon");
+  assert.ok(favicon.body.length > 100);
+});
+
+await test("protects the add-member form from accidental dismissal", async () => {
+  const { handler, authHeaders } = harness();
+  const page = await invoke(handler, { url: "/", headers: authHeaders });
+  const script = await invoke(handler, { url: "/assets/app.js" });
+  assert.match(page.body, /Discard this team member\?/);
+  assert.match(page.body, /The information entered in the form has not been saved\./);
+  assert.match(script.body, /addUserDirty/);
+  assert.match(script.body, /discard-user-dialog/);
+  assert.doesNotMatch(script.body, /getBoundingClientRect/);
+});
+
+await test("serves a scanner-safe invitation page without exposing the Keycloak token", async () => {
+  const { handler, invitationCode, invitationActionUrl } = harness();
+  const res = await invoke(handler, { url: `/invite/${invitationCode}` });
+  assert.equal(res.statusCode, 200);
+  assert.match(res.body, /Continue setup/);
+  assert.match(res.body, new RegExp(`/invite/${invitationCode}/continue`));
+  assert.doesNotMatch(res.body, /private-keycloak-token/);
+  assert.doesNotMatch(res.body, new RegExp(invitationActionUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.equal(res.headers.get("cache-control"), "no-store");
+});
+
+await test("serves invitation styling without allowing inline styles", async () => {
+  const { handler } = harness();
+  const res = await invoke(handler, { url: "/invite/invitation.css" });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.headers.get("content-type"), "text/css; charset=utf-8");
+  assert.match(res.body, /\.card/);
+  assert.match(res.headers.get("content-security-policy"), /style-src 'self'/);
+});
+
+await test("reveals the Keycloak action only after a valid invitation confirmation POST", async () => {
+  const { handler, invitationCode, invitationActionUrl } = harness();
+  const res = await invoke(handler, {
+    method: "POST",
+    url: `/invite/${invitationCode}/continue`,
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: `confirmation=${encodeURIComponent(`confirmation-${invitationCode}`)}`,
+  });
+  assert.equal(res.statusCode, 303);
+  assert.equal(res.headers.get("location"), invitationActionUrl);
+});
+
+await test("rejects invalid and expired invitation capabilities", async () => {
+  const { handler, invitationCode } = harness();
+  const invalid = await invoke(handler, { url: `/invite/${"B".repeat(22)}` });
+  assert.equal(invalid.statusCode, 410);
+  assert.match(invalid.body, /invalid or has expired/);
+  const forged = await invoke(handler, {
+    method: "POST",
+    url: `/invite/${invitationCode}/continue`,
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: "confirmation=forged",
+  });
+  assert.equal(forged.statusCode, 403);
+  assert.equal(forged.json.error, "invitation_confirmation_failed");
+});
+
+await test("rejects an unauthenticated API request", async () => {
+  const { handler } = harness();
+  const res = await invoke(handler, { url: "/api/organizations" });
+  assert.equal(res.statusCode, 401);
+  assert.equal(res.json.error, "authentication_required");
+});
+
+await test("returns only the signed-in user's safe session fields", async () => {
+  const { handler, authHeaders, created } = harness();
+  const res = await invoke(handler, { url: "/api/session", headers: authHeaders });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.json.user, {
+    sub: "admin-1",
+    email: "admin@example.test",
+    name: "Test Admin",
+    roles: ["ngenious-admin"],
+  });
+  assert.equal(res.json.csrf, created.session.csrf);
+  assert.equal(res.json.user.expiresAt, undefined);
+});
+
+await test("returns the consolidated Team view", async () => {
+  const { handler, authHeaders, calls } = harness();
+  const res = await invoke(handler, { url: "/api/team", headers: authHeaders });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.json.team.mode, "internal");
+  assert.equal(calls[0][0], "team");
+});
+
+await test("creates one Team identity with multiple organization memberships", async () => {
+  const { handler, authHeaders, calls } = harness();
+  const body = { email: "person@example.test", firstName: "Person", lastName: "One", organizationIds: ["org-1", "org-2"], applications: ["streamer"] };
+  const res = await invoke(handler, {
+    method: "POST", url: "/api/team/users", headers: { ...authHeaders, "content-type": "application/json" }, body: JSON.stringify(body),
+  });
+  assert.equal(res.statusCode, 201);
+  assert.equal(calls[0][0], "addTeamMember");
+  assert.deepEqual(calls[0][2], body);
+});
+
+await test("updates consolidated organization and application access", async () => {
+  const { handler, authHeaders, calls } = harness();
+  const body = { organizationIds: ["org-2"], applications: ["streamer"] };
+  const res = await invoke(handler, {
+    method: "PATCH", url: "/api/team/users/person%20one", headers: { ...authHeaders, "content-type": "application/json" }, body: JSON.stringify(body),
+  });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(calls[0].slice(0, 4), ["updateTeamMember", calls[0][1], "person one", body]);
+});
+
+await test("permanently deletes a Team identity through a protected request", async () => {
+  const { handler, authHeaders, calls } = harness();
+  const res = await invoke(handler, {
+    method: "DELETE", url: "/api/team/users/person%20one", headers: authHeaders,
+  });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.json.user.deleted, true);
+  assert.equal(res.json.user.removedFromPlatform, true);
+  assert.deepEqual(calls[0].slice(0, 3), ["deleteTeamMember", calls[0][1], "person one"]);
+});
+
+await test("generates a setup password through a protected no-store request", async () => {
+  const { handler, authHeaders, calls } = harness();
+  const res = await invoke(handler, {
+    method: "POST", url: "/api/team/users/person%20one/setup-password", headers: authHeaders,
+  });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.json.user.setupPassword, "Temporary-password-42!");
+  assert.equal(res.json.user.temporary, true);
+  assert.equal(res.headers.get("cache-control"), "no-store");
+  assert.deepEqual(calls[0].slice(0, 3), ["generateSetupPassword", calls[0][1], "person one"]);
+});
+
+await test("rejects a write when the CSRF token is missing", async () => {
+  const { handler, authHeaders, calls } = harness();
+  const headers = { cookie: authHeaders.cookie, "content-type": "application/json" };
+  const res = await invoke(handler, { method: "POST", url: "/api/organizations/org-1/users", headers, body: "{}" });
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.json.error, "csrf_failed");
+  assert.equal(calls.length, 0);
+});
+
+await test("rejects a write when the CSRF token is invalid", async () => {
+  const { handler, authHeaders, calls } = harness();
+  const headers = { ...authHeaders, "x-controlt-csrf": "wrong", "content-type": "application/json" };
+  const res = await invoke(handler, { method: "POST", url: "/api/organizations/org-1/users", headers, body: "{}" });
+  assert.equal(res.statusCode, 403);
+  assert.equal(calls.length, 0);
+});
+
+await test("accepts a valid protected create-user request", async () => {
+  const { handler, authHeaders, calls } = harness();
+  const body = { email: "new@example.test", firstName: "New", lastName: "User", applications: ["streamer"] };
+  const res = await invoke(handler, {
+    method: "POST",
+    url: "/api/organizations/customer%20one/users",
+    headers: { ...authHeaders, "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.json.user.status, "invited");
+  assert.equal(calls[0][0], "createAndInvite");
+  assert.equal(calls[0][2], "customer one");
+  assert.deepEqual(calls[0][3], body);
+});
+
+await test("requires JSON for a request with a body", async () => {
+  const { handler, authHeaders } = harness();
+  const res = await invoke(handler, { method: "POST", url: "/api/organizations/org-1/users", headers: authHeaders, body: "email=x" });
+  assert.equal(res.statusCode, 415);
+  assert.equal(res.json.error, "json_required");
+});
+
+await test("rejects malformed JSON", async () => {
+  const { handler, authHeaders } = harness();
+  const res = await invoke(handler, {
+    method: "POST", url: "/api/organizations/org-1/users", headers: { ...authHeaders, "content-type": "application/json" }, body: "{",
+  });
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.json.error, "invalid_json");
+});
+
+await test("rejects a request body over the size limit", async () => {
+  const { handler, authHeaders } = harness();
+  const res = await invoke(handler, {
+    method: "POST", url: "/api/organizations/org-1/users", headers: { ...authHeaders, "content-type": "application/json" }, body: Buffer.alloc(65_537, 32),
+  });
+  assert.equal(res.statusCode, 413);
+  assert.equal(res.json.error, "request_too_large");
+});
+
+await test("logout invalidates the local session and returns the identity logout URL", async () => {
+  const { handler, authHeaders } = harness();
+  const logout = await invoke(handler, { method: "POST", url: "/auth/logout", headers: authHeaders });
+  assert.equal(logout.statusCode, 200);
+  assert.equal(logout.json.redirect, "https://id.example.test/logout");
+  assert.match(logout.headers.get("set-cookie"), /Max-Age=0/);
+  const after = await invoke(handler, { url: "/api/session", headers: { cookie: authHeaders.cookie } });
+  assert.equal(after.statusCode, 401);
+});
+
+await test("does not expose an identity-provider error body", async () => {
+  const h = harness();
+  h.service.listOrganizations = async () => { throw new KeycloakApiError(500, "failed", "sensitive upstream response"); };
+  const res = await invoke(h.handler, { url: "/api/organizations", headers: h.authHeaders });
+  assert.equal(res.statusCode, 502);
+  assert.equal(res.json.error, "identity_service_error");
+  assert.doesNotMatch(res.body, /sensitive/);
+  assert.deepEqual({ type: h.errors[0].type, upstreamStatus: h.errors[0].upstreamStatus }, { type: "controlt.identity_error", upstreamStatus: 500 });
+});
+
+await test("returns a secured 404 for an unknown route", async () => {
+  const { handler } = harness();
+  const res = await invoke(handler, { url: "/not-a-route" });
+  assert.equal(res.statusCode, 404);
+  assert.equal(res.json.error, "not_found");
+  assert.equal(res.headers.get("x-frame-options"), "DENY");
+});
+
+await test("rejects a callback without a matching login flow", async () => {
+  const { handler } = harness();
+  const res = await invoke(handler, { url: "/auth/callback?state=wrong&code=code-1" });
+  assert.equal(res.statusCode, 401);
+  assert.equal(res.json.error, "login_failed");
+});
+
+await test("starts an authorization flow with a short-lived protected cookie", async () => {
+  const { handler } = harness();
+  const res = await invoke(handler, { url: "/auth/login" });
+  assert.equal(res.statusCode, 302);
+  assert.equal(res.headers.get("location"), "https://id.example.test/authorize");
+  assert.match(res.headers.get("set-cookie")[0], /^controlt_oidc=/);
+  assert.match(res.headers.get("set-cookie")[0], /HttpOnly/);
+  assert.match(res.headers.get("set-cookie")[0], /Secure/);
+});
+
+if (!process.exitCode) process.stdout.write(`${passed} HTTP and security tests passed\n`);

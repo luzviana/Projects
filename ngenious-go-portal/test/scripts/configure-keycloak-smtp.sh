@@ -4,7 +4,18 @@ set -euo pipefail
 REALM=go-portal-test
 ADMIN_SECRET=ngenious-go-portal/test/bootstrap-admin
 KEYCLOAK_CONTAINER=keycloak
-THEME=ngenious-go
+
+smtp_host=${SMTP_HOST:-smtp-relay.gmail.com}
+smtp_port=${SMTP_PORT:-587}
+smtp_from=${SMTP_FROM:-aws@viana.ooo}
+smtp_from_name=${SMTP_FROM_NAME:-ngenious}
+smtp_reply_to=${SMTP_REPLY_TO:-aws@viana.ooo}
+
+[[ "$smtp_port" =~ ^[1-9][0-9]*$ ]]
+[[ "$smtp_from" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]
+if [[ -n "$smtp_reply_to" ]]; then
+  [[ "$smtp_reply_to" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]
+fi
 
 ADMIN_JSON=$(aws secretsmanager get-secret-value \
   --region us-east-1 \
@@ -19,11 +30,9 @@ kc() {
 }
 
 authenticate_admin() {
-  local username=$1
-  local password=$2
   docker exec \
-    -e ADMIN_USER="$username" \
-    -e ADMIN_PASSWORD="$password" \
+    -e ADMIN_USER="$1" \
+    -e ADMIN_PASSWORD="$2" \
     "$KEYCLOAK_CONTAINER" \
     sh -c '/opt/keycloak/bin/kcadm.sh config credentials \
       --server http://localhost:8080 \
@@ -48,24 +57,23 @@ wait_for_keycloak() {
 }
 
 recovery_admin_created=false
-cleanup_recovery_admin() {
-  if [[ "$recovery_admin_created" != true ]]; then
-    return
-  fi
+cleanup() {
   set +e
-  recovery_admin_id=$(kc get users -r master \
-    -q exact=true -q username="$RECOVERY_ADMIN_USER" \
-    --fields id,username | jq -r '.[0].id // empty')
-  if [[ -n "$recovery_admin_id" ]]; then
-    kc delete "users/$recovery_admin_id" -r master >/dev/null
-    printf 'Removed temporary recovery administrator.\n'
+  if [[ "$recovery_admin_created" = true ]]; then
+    recovery_admin_id=$(kc get users -r master \
+      -q exact=true -q username="$RECOVERY_ADMIN_USER" \
+      --fields id,username | jq -r '.[0].id // empty')
+    if [[ -n "$recovery_admin_id" ]]; then
+      kc delete "users/$recovery_admin_id" -r master >/dev/null
+    fi
   fi
-  unset RECOVERY_ADMIN_USER RECOVERY_ADMIN_PASSWORD recovery_admin_id
+  unset ADMIN_JSON ADMIN_PASSWORD \
+    RECOVERY_ADMIN_USER RECOVERY_ADMIN_PASSWORD recovery_admin_id
 }
+trap cleanup EXIT
 
 if ! authenticate_admin "$ADMIN_USER" "$ADMIN_PASSWORD"; then
-  printf 'Bootstrap administrator is unavailable; creating a local temporary recovery administrator.\n'
-  RECOVERY_ADMIN_USER="theme-config-$(openssl rand -hex 6)"
+  RECOVERY_ADMIN_USER="smtp-config-$(openssl rand -hex 6)"
   RECOVERY_ADMIN_PASSWORD="Ngr!2026-$(openssl rand -hex 16)"
   keycloak_image_id=$(docker inspect "$KEYCLOAK_CONTAINER" --format '{{.Image}}')
 
@@ -86,25 +94,43 @@ if ! authenticate_admin "$ADMIN_USER" "$ADMIN_PASSWORD"; then
   wait_for_keycloak
   authenticate_admin "$RECOVERY_ADMIN_USER" "$RECOVERY_ADMIN_PASSWORD"
   recovery_admin_created=true
-  trap cleanup_recovery_admin EXIT
 fi
 
 unset ADMIN_JSON ADMIN_USER ADMIN_PASSWORD
 
-kc update "realms/$REALM" \
-    -s "loginTheme=$THEME" \
-    -s "accountTheme=$THEME" \
-    -s "emailTheme=$THEME" \
-    -s 'displayName=ngenious Account'
+smtp_payload=$(jq -cn \
+  --arg host "$smtp_host" \
+  --arg port "$smtp_port" \
+  --arg from "$smtp_from" \
+  --arg from_name "$smtp_from_name" \
+  --arg reply_to "$smtp_reply_to" \
+  '{smtpServer: {
+      host: $host,
+      port: $port,
+      auth: "false",
+      starttls: "true",
+      ssl: "false",
+      from: $from,
+      fromDisplayName: $from_name
+    }}
+    | if $reply_to == "" then . else
+        .smtpServer.replyTo = $reply_to |
+        .smtpServer.replyToDisplayName = $from_name
+      end')
 
-ACTIVE_THEMES=$(kc get "realms/$REALM" \
-    --fields loginTheme,accountTheme,emailTheme,displayName)
+kc update "realms/$REALM" -b "$smtp_payload" >/dev/null
+unset smtp_payload
 
-test "$(printf '%s' "$ACTIVE_THEMES" | jq -r .loginTheme)" = "$THEME"
-test "$(printf '%s' "$ACTIVE_THEMES" | jq -r .accountTheme)" = "$THEME"
-test "$(printf '%s' "$ACTIVE_THEMES" | jq -r .emailTheme)" = "$THEME"
-test "$(printf '%s' "$ACTIVE_THEMES" | jq -r .displayName)" = 'ngenious Account'
-printf 'Active themes: login=%s account=%s email=%s\n' \
-  "$(printf '%s' "$ACTIVE_THEMES" | jq -r .loginTheme)" \
-  "$(printf '%s' "$ACTIVE_THEMES" | jq -r .accountTheme)" \
-  "$(printf '%s' "$ACTIVE_THEMES" | jq -r .emailTheme)"
+saved_smtp=$(kc get "realms/$REALM")
+printf '%s' "$saved_smtp" | jq -e \
+  --arg host "$smtp_host" \
+  --arg port "$smtp_port" \
+  --arg from "$smtp_from" \
+  '.smtpServer.host == $host and
+   .smtpServer.port == $port and
+   .smtpServer.from == $from and
+   .smtpServer.auth == "false" and
+   .smtpServer.starttls == "true"' >/dev/null
+
+printf 'Configured Keycloak SMTP delivery through the IP-restricted relay at %s.\n' \
+  "$smtp_host"

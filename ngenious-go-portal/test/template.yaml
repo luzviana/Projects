@@ -24,38 +24,6 @@ Parameters:
     Default: docker.io/library/postgres@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
 
 Resources:
-  DatabaseSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: ngenious-go-portal/test/database
-      Description: PostgreSQL credential for the ngenious Go Portal test prototype
-      GenerateSecretString:
-        SecretStringTemplate: '{"username":"keycloak"}'
-        GenerateStringKey: password
-        PasswordLength: 36
-        ExcludeCharacters: '"@/\\'
-      Tags:
-        - Key: Project
-          Value: ngenious-go-portal
-        - Key: Environment
-          Value: test
-
-  BootstrapAdminSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: ngenious-go-portal/test/bootstrap-admin
-      Description: Temporary Keycloak bootstrap administrator for the test prototype
-      GenerateSecretString:
-        SecretStringTemplate: '{"username":"goportal-bootstrap"}'
-        GenerateStringKey: password
-        PasswordLength: 36
-        ExcludeCharacters: '"@/\\'
-      Tags:
-        - Key: Project
-          Value: ngenious-go-portal
-        - Key: Environment
-          Value: test
-
   InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -69,16 +37,6 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-      Policies:
-        - PolicyName: read-go-portal-test-secrets
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: secretsmanager:GetSecretValue
-                Resource:
-                  - !Ref DatabaseSecret
-                  - !Ref BootstrapAdminSecret
       Tags:
         - Key: Project
           Value: ngenious-go-portal
@@ -103,6 +61,11 @@ Resources:
           IpProtocol: tcp
           FromPort: 443
           ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - Description: Authenticated SMTP submission for Keycloak email delivery
+          IpProtocol: tcp
+          FromPort: 587
+          ToPort: 587
           CidrIp: 0.0.0.0/0
         - Description: DNS over UDP to the VPC resolver
           IpProtocol: udp
@@ -167,23 +130,22 @@ Resources:
           install -d -m 0700 /opt/go-portal/secrets
           install -d -m 0750 /opt/go-portal/postgres /opt/go-portal/backups /opt/go-portal/import
 
-          DB_JSON=$(aws secretsmanager get-secret-value --region ${AWS::Region} --secret-id '${DatabaseSecret}' --query SecretString --output text)
-          ADMIN_JSON=$(aws secretsmanager get-secret-value --region ${AWS::Region} --secret-id '${BootstrapAdminSecret}' --query SecretString --output text)
-          DB_USER=$(printf '%s' "$DB_JSON" | jq -r .username)
-          DB_PASSWORD=$(printf '%s' "$DB_JSON" | jq -r .password)
-          ADMIN_USER=$(printf '%s' "$ADMIN_JSON" | jq -r .username)
-          ADMIN_PASSWORD=$(printf '%s' "$ADMIN_JSON" | jq -r .password)
+          DB_USER=keycloak
+          DB_PASSWORD=$(openssl rand -hex 32)
+          ADMIN_USER="goportal-bootstrap-$(openssl rand -hex 6)"
+          ADMIN_PASSWORD=$(openssl rand -hex 32)
 
           umask 077
           printf 'POSTGRES_DB=keycloak\nPOSTGRES_USER=%s\nPOSTGRES_PASSWORD=%s\n' "$DB_USER" "$DB_PASSWORD" > /opt/go-portal/secrets/postgres.env
           printf 'KC_DB=postgres\nKC_DB_URL=jdbc:postgresql://postgres:5432/keycloak\nKC_DB_USERNAME=%s\nKC_DB_PASSWORD=%s\nKC_BOOTSTRAP_ADMIN_USERNAME=%s\nKC_BOOTSTRAP_ADMIN_PASSWORD=%s\nKC_HTTP_ENABLED=true\nKC_HOSTNAME=http://localhost:18080\nKC_HEALTH_ENABLED=true\nKC_METRICS_ENABLED=false\n' "$DB_USER" "$DB_PASSWORD" "$ADMIN_USER" "$ADMIN_PASSWORD" > /opt/go-portal/secrets/keycloak.env
-          unset DB_JSON ADMIN_JSON DB_PASSWORD ADMIN_PASSWORD
 
           cat > /opt/go-portal/import/go-portal-test-realm.json <<'REALM'
           {
             "realm": "go-portal-test",
-            "displayName": "ngenious Go Portal Test",
+            "displayName": "ngenious Account",
             "enabled": true,
+            "loginTheme": "ngenious-go",
+            "accountTheme": "ngenious-go",
             "organizationsEnabled": true,
             "registrationAllowed": false,
             "registrationEmailAsUsername": true,
@@ -233,17 +195,164 @@ Resources:
             '${KeycloakImage}' \
             start --import-realm
 
+          ready=false
+          for attempt in $(seq 1 90); do
+            if curl --max-time 5 -fsS \
+              http://127.0.0.1:8080/realms/go-portal-test/.well-known/openid-configuration \
+              >/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = true
+
+          docker exec \
+            -e ADMIN_USER="$ADMIN_USER" \
+            -e ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+            keycloak sh -c '/opt/keycloak/bin/kcadm.sh config credentials \
+              --server http://localhost:8080 --realm master \
+              --user "$ADMIN_USER" --password "$ADMIN_PASSWORD" >/dev/null'
+
+          CLIENT_ID=controlt-service
+          CLIENT_CONFIG=$(jq -cn --arg clientId "$CLIENT_ID" '{
+            clientId: $clientId,
+            name: "ControlT administration service",
+            description: "Backend-only least-privilege client for ControlT user administration",
+            enabled: true,
+            protocol: "openid-connect",
+            publicClient: false,
+            bearerOnly: false,
+            serviceAccountsEnabled: true,
+            standardFlowEnabled: false,
+            implicitFlowEnabled: false,
+            directAccessGrantsEnabled: false,
+            authorizationServicesEnabled: false,
+            fullScopeAllowed: false,
+            clientAuthenticatorType: "client-secret"
+          }')
+          CLIENT_UUID=$(docker exec -i keycloak /opt/keycloak/bin/kcadm.sh \
+            create clients -r go-portal-test -f - -i <<<"$CLIENT_CONFIG")
+          SERVICE_USER_ID=$(docker exec keycloak /opt/keycloak/bin/kcadm.sh \
+            get "clients/$CLIENT_UUID/service-account-user" -r go-portal-test \
+            --fields id | jq -er .id)
+          REALM_MANAGEMENT_ID=$(docker exec keycloak /opt/keycloak/bin/kcadm.sh \
+            get clients -r go-portal-test -q clientId=realm-management \
+            --fields id | jq -er '.[0].id')
+
+          for ROLE_NAME in manage-users view-users query-users query-organizations view-clients query-clients; do
+            ROLE_JSON=$(docker exec keycloak /opt/keycloak/bin/kcadm.sh \
+              get "clients/$REALM_MANAGEMENT_ID/roles/$ROLE_NAME" \
+              -r go-portal-test -c)
+            docker exec keycloak /opt/keycloak/bin/kcadm.sh create \
+              "users/$SERVICE_USER_ID/role-mappings/clients/$REALM_MANAGEMENT_ID" \
+              -r go-portal-test -b "[$ROLE_JSON]" >/dev/null
+            docker exec keycloak /opt/keycloak/bin/kcadm.sh create \
+              "clients/$CLIENT_UUID/scope-mappings/clients/$REALM_MANAGEMENT_ID" \
+              -r go-portal-test -b "[$ROLE_JSON]" >/dev/null
+          done
+
+          CLIENT_SECRET=$(docker exec keycloak /opt/keycloak/bin/kcadm.sh \
+            get "clients/$CLIENT_UUID/client-secret" -r go-portal-test | jq -er .value)
+
+          OIDC_CLIENT_ID=controlt-web
+          OIDC_CLIENT_CONFIG=$(jq -cn --arg clientId "$OIDC_CLIENT_ID" '{
+            clientId: $clientId,
+            name: "ControlT",
+            description: "Customer-safe ngenious administration interface",
+            enabled: true,
+            protocol: "openid-connect",
+            publicClient: false,
+            serviceAccountsEnabled: false,
+            standardFlowEnabled: true,
+            implicitFlowEnabled: false,
+            directAccessGrantsEnabled: false,
+            fullScopeAllowed: false,
+            clientAuthenticatorType: "client-secret",
+            rootUrl: "https://controlt.ngenious.app",
+            baseUrl: "/",
+            redirectUris: ["https://controlt.ngenious.app/auth/callback"],
+            webOrigins: ["https://controlt.ngenious.app"],
+            attributes: {
+              "pkce.code.challenge.method": "S256",
+              "post.logout.redirect.uris": "https://controlt.ngenious.app/"
+            }
+          }')
+          OIDC_CLIENT_UUID=$(docker exec -i keycloak /opt/keycloak/bin/kcadm.sh \
+            create clients -r go-portal-test -f - -i <<<"$OIDC_CLIENT_CONFIG")
+          for ROLE_NAME in ngenious-admin organization-admin; do
+            docker exec keycloak /opt/keycloak/bin/kcadm.sh create \
+              "clients/$OIDC_CLIENT_UUID/roles" -r go-portal-test \
+              -s name="$ROLE_NAME" >/dev/null
+            ROLE_JSON=$(docker exec keycloak /opt/keycloak/bin/kcadm.sh get \
+              "clients/$OIDC_CLIENT_UUID/roles/$ROLE_NAME" -r go-portal-test -c)
+            docker exec keycloak /opt/keycloak/bin/kcadm.sh create \
+              "clients/$OIDC_CLIENT_UUID/scope-mappings/clients/$OIDC_CLIENT_UUID" \
+              -r go-portal-test -b "[$ROLE_JSON]" >/dev/null
+          done
+          OIDC_CLIENT_SECRET=$(docker exec keycloak /opt/keycloak/bin/kcadm.sh \
+            get "clients/$OIDC_CLIENT_UUID/client-secret" -r go-portal-test | jq -er .value)
+
+          CONTROLT_SESSION_SECRET=$(openssl rand -hex 32)
+          printf 'KEYCLOAK_INTERNAL_URL=http://keycloak:8080\nKEYCLOAK_ISSUER=https://id.ngenious.app/realms/go-portal-test\nKEYCLOAK_REALM=go-portal-test\nKEYCLOAK_ADMIN_CLIENT_ID=%s\nKEYCLOAK_ADMIN_CLIENT_SECRET=%s\nCONTROLT_OIDC_CLIENT_ID=%s\nCONTROLT_OIDC_CLIENT_SECRET=%s\nCONTROLT_SESSION_SECRET=%s\n' \
+            "$CLIENT_ID" "$CLIENT_SECRET" "$OIDC_CLIENT_ID" "$OIDC_CLIENT_SECRET" "$CONTROLT_SESSION_SECRET" \
+            > /opt/go-portal/secrets/controlt.env
+          chown root:root /opt/go-portal/secrets/controlt.env
+          chmod 0600 /opt/go-portal/secrets/controlt.env
+
+          ACCESS_TOKEN=$(curl --max-time 15 -fsS \
+            -X POST http://127.0.0.1:8080/realms/go-portal-test/protocol/openid-connect/token \
+            -H 'Content-Type: application/x-www-form-urlencoded' \
+            --data-urlencode grant_type=client_credentials \
+            --data-urlencode client_id="$CLIENT_ID" \
+            --data-urlencode client_secret="$CLIENT_SECRET" | jq -er .access_token)
+          for RESOURCE in users organizations clients; do
+            curl --max-time 15 -fsS \
+              -H "Authorization: Bearer $ACCESS_TOKEN" \
+              "http://127.0.0.1:8080/admin/realms/go-portal-test/$RESOURCE?max=1" \
+              >/dev/null
+          done
+          test "$(stat -c '%U:%G:%a' /opt/go-portal/secrets)" = root:root:700
+          test "$(stat -c '%U:%G:%a' /opt/go-portal/secrets/controlt.env)" = root:root:600
+
+          BOOTSTRAP_USER_ID=$(docker exec keycloak /opt/keycloak/bin/kcadm.sh \
+            get users -r master -q exact=true -q username="$ADMIN_USER" \
+            --fields id | jq -er '.[0].id')
+          docker exec keycloak /opt/keycloak/bin/kcadm.sh \
+            delete "users/$BOOTSTRAP_USER_ID" -r master >/dev/null
+          sed -i '/^KC_BOOTSTRAP_ADMIN_/d' /opt/go-portal/secrets/keycloak.env
+          unset ACCESS_TOKEN ADMIN_PASSWORD CLIENT_SECRET OIDC_CLIENT_SECRET CONTROLT_SESSION_SECRET DB_PASSWORD
+
           cat > /usr/local/sbin/go-portal-firewall <<'FIREWALL'
           #!/bin/bash
           set -euo pipefail
           iptables -C OUTPUT -p udp -d 172.31.0.2 --dport 53 -j ACCEPT 2>/dev/null || iptables -I OUTPUT 1 -p udp -d 172.31.0.2 --dport 53 -j ACCEPT
           iptables -C OUTPUT -p tcp -d 172.31.0.2 --dport 53 -j ACCEPT 2>/dev/null || iptables -I OUTPUT 1 -p tcp -d 172.31.0.2 --dport 53 -j ACCEPT
           iptables -C OUTPUT -d 172.30.0.0/24 -j ACCEPT 2>/dev/null || iptables -I OUTPUT 1 -d 172.30.0.0/24 -j ACCEPT
-          iptables -C DOCKER-USER -s 172.30.0.0/24 -d 172.30.0.0/24 -j ACCEPT 2>/dev/null || iptables -I DOCKER-USER 1 -s 172.30.0.0/24 -d 172.30.0.0/24 -j ACCEPT
+
+          remove_docker_rule() {
+            while iptables -C DOCKER-USER "$@" 2>/dev/null; do
+              iptables -D DOCKER-USER "$@"
+            done
+          }
+          remove_docker_rule -s 172.30.0.0/24 -d 172.30.0.0/24 -j ACCEPT
+          remove_docker_rule -s 172.30.0.0/24 -d 172.31.0.2/32 -p udp --dport 53 -j ACCEPT
+          remove_docker_rule -s 172.30.0.0/24 -d 172.31.0.2/32 -p tcp --dport 53 -j ACCEPT
+          remove_docker_rule -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
           for cidr in 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16; do
             iptables -C OUTPUT -d "$cidr" -j REJECT 2>/dev/null || iptables -A OUTPUT -d "$cidr" -j REJECT
-            iptables -C DOCKER-USER -d "$cidr" -j REJECT 2>/dev/null || iptables -I DOCKER-USER 2 -d "$cidr" -j REJECT
+            remove_docker_rule -d "$cidr" -j REJECT
           done
+
+          # Insert in reverse order at the top so explicit DNS and established
+          # connection allowances always precede broad private-network blocks.
+          iptables -I DOCKER-USER 1 -d 192.168.0.0/16 -j REJECT
+          iptables -I DOCKER-USER 1 -d 172.16.0.0/12 -j REJECT
+          iptables -I DOCKER-USER 1 -d 10.0.0.0/8 -j REJECT
+          iptables -I DOCKER-USER 1 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+          iptables -I DOCKER-USER 1 -s 172.30.0.0/24 -d 172.31.0.2/32 -p tcp --dport 53 -j ACCEPT
+          iptables -I DOCKER-USER 1 -s 172.30.0.0/24 -d 172.31.0.2/32 -p udp --dport 53 -j ACCEPT
+          iptables -I DOCKER-USER 1 -s 172.30.0.0/24 -d 172.30.0.0/24 -j ACCEPT
           FIREWALL
           chmod 0750 /usr/local/sbin/go-portal-firewall
 
@@ -292,10 +401,6 @@ Outputs:
   InstanceId:
     Description: EC2 instance used by the Go Portal test prototype
     Value: !Ref Instance
-  DatabaseSecretName:
-    Value: !Ref DatabaseSecret
-  BootstrapAdminSecretName:
-    Value: !Ref BootstrapAdminSecret
   PortForwardCommand:
     Description: Requires the AWS Session Manager plugin on the operator computer
     Value: !Sub >-

@@ -25,8 +25,8 @@ set_env_value() {
   fi
 }
 
-set_env_value KC_HOSTNAME https://got.ngenious.app
-set_env_value KC_HOSTNAME_ADMIN http://localhost:18080
+set_env_value KC_HOSTNAME https://id.ngenious.app
+set_env_value KC_HOSTNAME_ADMIN https://controlt.ngenious.app
 set_env_value KC_PROXY_HEADERS xforwarded
 set_env_value KC_PROXY_TRUSTED_ADDRESSES 172.30.0.1
 
@@ -59,9 +59,9 @@ docker run -d \
 ready=false
 for attempt in $(seq 1 90); do
   if curl --max-time 5 -fsS \
-    -H 'Host: got.ngenious.app' \
+    -H 'Host: id.ngenious.app' \
     http://127.0.0.1:8080/realms/go-portal-test/.well-known/openid-configuration \
-    | jq -e '.issuer == "https://got.ngenious.app/realms/go-portal-test"' >/dev/null; then
+    | jq -e '.issuer == "https://id.ngenious.app/realms/go-portal-test"' >/dev/null; then
     ready=true
     break
   fi
@@ -88,4 +88,8 @@ docker run -d \
   "$CADDY_IMAGE" \
   caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
 
-echo 'Public customer portal configuration completed'
+admin_status=$(curl --max-time 10 -sS -o /dev/null -w '%{http_code}' \
+  https://controlt.ngenious.app/admin/go-portal-test/console/)
+[[ "$admin_status" == 200 || "$admin_status" == 302 ]]
+
+echo 'Public identity and ngenious administration configuration completed'

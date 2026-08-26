@@ -9,8 +9,39 @@ got.ngenious.app {
 	@administration path /admin* /realms/master*
 	respond @administration 404
 
+	@identity path /realms/go-portal-test/* /resources/*
+	reverse_proxy @identity 127.0.0.1:8080
+
+	reverse_proxy 127.0.0.1:3000
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 25MiB
+			roll_keep 10
+			roll_keep_for 720h
+		}
+		format json
+	}
+}
+
+id.ngenious.app {
+	encode zstd gzip
+
+	@administration path /admin*
+	respond @administration 404
+
 	@root path /
 	redir @root /realms/go-portal-test/account/ 302
+
+	@invitations path /invite/*
+	reverse_proxy @invitations 127.0.0.1:3100
 
 	reverse_proxy 127.0.0.1:8080
 
@@ -22,7 +53,29 @@ got.ngenious.app {
 	}
 
 	log {
-		output file /var/log/caddy/access.log {
+		output file /var/log/caddy/identity-access.log {
+			roll_size 25MiB
+			roll_keep 10
+			roll_keep_for 720h
+		}
+		format json
+	}
+}
+
+controlt.ngenious.app {
+	encode zstd gzip
+
+	reverse_proxy 127.0.0.1:3100
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy "same-origin"
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/administration-access.log {
 			roll_size 25MiB
 			roll_keep 10
 			roll_keep_for 720h

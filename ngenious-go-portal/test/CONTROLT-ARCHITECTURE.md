@@ -1,0 +1,344 @@
+# Control administration architecture
+
+Status: approved target for the shared-test PoC
+
+Decision date: 2026-08-18
+
+## Objective
+
+**Control** is the administration workspace for ngenious Customer Account
+Managers and customer administrators. User onboarding and application access
+are its first capabilities; the product is intentionally positioned to support
+additional customer-account services later. It removes Keycloak-specific
+concepts such as required actions, email-verification flags, credentials,
+WebAuthn, realm roles, and authentication flows from the customer workflow.
+
+The early implementation name `ControlT` identified the test environment. The
+public product name is **Control**, and the page is labeled **Control
+administration**. Existing technical identifiers retain the `controlt` name
+until a separate infrastructure migration is justified.
+
+The target operation is:
+
+> Create user and send invitation
+
+That single operation creates or validates the identity, assigns the authorized
+organization and applications, and asks Keycloak to create the expiring
+`VERIFY_EMAIL` and `UPDATE_PASSWORD` action. The recipient receives an opaque
+ngenious invitation URL; the raw Keycloak action URL is never placed in the
+outbound email.
+
+## System boundary
+
+Keycloak remains the identity engine and source of truth. It continues to own:
+
+- users and email-verification state;
+- password credentials and password policy;
+- login, logout, sessions, cookies, and tokens;
+- organizations, memberships, roles, and application access;
+- required actions and expiring action tokens;
+- future MFA and passwordless authentication; and
+- branded verification, setup, and recovery email generation.
+
+ControlT is an administration facade over supported Keycloak APIs. It owns:
+
+- the customer-administrator user experience;
+- authorization checks that bind a customer administrator to one organization;
+- orchestration of user creation, membership, application access, and email;
+- safe duplicate-user and resend behavior;
+- encrypted, expiring invitation indirection; and
+- minimal administrator audit metadata.
+
+ControlT must never store or log passwords, validate them itself, issue identity
+tokens, implement login, or reproduce Keycloak authentication flows. It may
+generate a temporary setup password in memory and submit it directly to
+Keycloak when an administrator explicitly chooses temporary-password setup.
+
+## Components
+
+### ControlT
+
+ControlT is a small Node.js web application with a server-side backend. The
+browser never receives the Keycloak administration credential. The backend uses
+a dedicated Keycloak confidential service client with only the permissions
+required by the approved operations.
+
+The PoC uses no separate ControlT database service. Keycloak remains authoritative for
+users, organization membership, application roles, enabled state, and email
+verification. Control keeps only an encrypted action URL and expiry in a
+root-protected local data directory, addressed by the hash of a random opaque
+code. Expired records are removed automatically. The invitation URL contains
+no Keycloak token, user identifier, email address, or organization identifier.
+
+### Keycloak
+
+Keycloak authenticates both administrators and application users. ControlT
+calls Keycloak's administration API from the server and uses the
+`execute-actions-email` endpoint to send the setup link. Merely saving required
+actions on a user is not treated as sending an invitation.
+
+### Control invitation relay and Postmark
+
+Keycloak generates the standard branded MIME message and submits it to
+Control's private SMTP listener on the isolated container network. Control
+extracts and validates the Keycloak action URL, stores it encrypted with a
+12-hour expiry, replaces it in both text and HTML bodies with
+`https://id.ngenious.app/invite/<opaque-code>`, and forwards the rewritten
+message through the Postmark HTTPS API. Control never generates the identity
+action and Postmark never receives the raw Keycloak token.
+
+The Control container uses the host's non-loopback DNS resolver for outbound
+lookups. Deployment must prove that the container can resolve and connect to
+the Postmark HTTPS endpoint before the new release is accepted. A failed check
+automatically restores the previous Control release.
+
+### Caddy
+
+Caddy is the existing HTTPS web gateway, equivalent in purpose to Nginx or an
+AWS application load balancer for this PoC. It obtains and renews TLS
+certificates, applies public security headers, writes access logs, and routes:
+
+- `got.ngenious.app` to the protected test application;
+- `id.ngenious.app/invite/*` to Control's invitation confirmation page;
+- all other `id.ngenious.app` paths to Keycloak login and self-service; and
+- `controlt.ngenious.app` to the ControlT application.
+
+Caddy does not authenticate users or store identity data. Keycloak port 8080
+and its management port remain unavailable from the public internet.
+
+### PostgreSQL
+
+PostgreSQL remains Keycloak's private database. ControlT must use supported
+Keycloak APIs and must not read or write Keycloak database tables directly.
+
+## Administrator roles
+
+### Customer administrator
+
+A customer administrator is bound to exactly one Keycloak organization and may:
+
+- list people in that organization;
+- create and invite a person into that organization;
+- grant only applications approved for that organization;
+- resend a pending invitation;
+- enable or disable a member when policy permits; and
+- change that member's approved application assignments.
+
+A customer administrator may not select or supply another organization, view
+another organization's members, manage Keycloak clients or roles, edit login
+flows, configure MFA, or open the native Keycloak administration console.
+Because only one organization is available, the interface does not display an
+organization selector or organization-membership controls.
+
+### ngenious internal administrator
+
+An ngenious internal administrator uses a people-first Team view across all
+authorized customer organizations. Each Keycloak identity appears once, with
+its organization memberships and approved application access shown together.
+The administrator can add an existing identity to another organization without
+creating a duplicate person or sending a second invitation. This role does not
+automatically grant unrestricted Keycloak realm administration. Operational
+access to the native console is a separate emergency capability.
+
+Authorization is enforced by the ControlT backend using authenticated token
+claims and server-side organization lookup. An organization identifier supplied
+by the browser is never trusted by itself.
+
+The confidential `controlt-web` login client defines two application roles:
+`ngenious-admin` and `organization-admin`. These roles identify the type of
+ControlT administrator; they do not grant native Keycloak console access. For a
+customer administrator, the backend additionally requires exactly one current
+Keycloak organization membership on every organization-scoped request.
+
+Each organization's approved applications are stored in its
+`ngenious.allowedApplications` attribute as Keycloak client IDs. Every listed
+client must expose the dedicated `access` client role. ControlT resolves this
+allowlist and the roles server-side and rejects browser-supplied applications
+that are not listed.
+
+Keycloak 26.7 requires organization `manage` authorization as well as user
+`manage` authorization to add or remove organization membership. It does not
+offer a membership-only organization scope. The Control service therefore
+receives a Fine-Grained Admin Permission for `view` and `manage` on the
+explicitly configured operational organizations only; it never receives the
+realm-wide `manage-organizations` role. Control's own API exposes membership
+operations but no organization update or deletion operation. Adding another
+customer organization requires the trusted provisioning workflow to add that
+specific organization resource to the permission.
+
+## User invitation workflow
+
+### New identity
+
+1. Validate and normalize the email address and names.
+2. Resolve every selected organization against the administrator's permitted
+   organizations on the server. Customer administrators are fixed to their one
+   organization.
+3. Validate requested applications against the selected organizations'
+   combined allowlist.
+4. Confirm that the email is not already owned by an incompatible identity.
+5. Create an enabled Keycloak user with `emailVerified=false` and no password.
+6. Add the user to every selected organization.
+7. Assign only the selected, permitted application access.
+8. Call `execute-actions-email` with `VERIFY_EMAIL` and `UPDATE_PASSWORD` and a
+   12-hour lifespan.
+9. Keycloak submits its generated message to the internal Control relay.
+10. Control encrypts the validated action URL, substitutes the opaque ngenious
+    invitation URL, and sends the rewritten message through Postmark.
+11. Return a clear success response identifying the recipient and link expiry.
+
+If Keycloak rejects the email request synchronously, ControlT removes access
+created by that incomplete operation or records a recoverable pending state.
+The implementation must be idempotent so a retry cannot create duplicate
+memberships or roles.
+
+### Existing identity
+
+- For an internal administrator, an existing identity is reused and assigned
+  to any additional selected organizations. It remains one person.
+- If that identity's onboarding is pending and the account is enabled, adding
+  it sends a fresh setup email automatically while preserving the user
+  identifier and permissions. Control also offers **Resend invitation**.
+- If the identity is already active in the same organization, ControlT reports
+  that status instead of sending an unexpected password-change email.
+- A customer administrator cannot absorb an identity from another organization;
+  that case is refused and directed to ngenious support.
+- ControlT never deletes and recreates an existing identity merely to resend an
+  invitation.
+
+### Temporary setup password
+
+If an invitation cannot be delivered, an authorized administrator may generate
+a strong temporary setup password for an enabled, pending member. Control sends
+the password directly to Keycloak as a temporary credential and displays it
+once to the administrator. It is never emailed, persisted by Control, or placed
+in logs or audit metadata. The administrator shares it through a separate
+trusted channel, and Keycloak requires the member to replace it at first
+sign-in. Generating another setup password invalidates the previous one. The
+member's email remains unverified.
+
+## Customer interface
+
+The customer-administrator page contains:
+
+- organization name, displayed read-only;
+- a searchable member list;
+- access status values **Not signed in yet**, **Active**, and **Disabled**;
+- permitted application assignments;
+- **Add user**;
+- **Resend invitation** for pending users; and
+- **Generate setup password** inside Manage for pending users; and
+- **Enable** or **Disable** when permitted.
+
+The internal-administrator version lists each person once and adds organization
+membership controls to the add and manage dialogs. It also provides permanent
+**Delete account** inside the Manage dialog rather than in the Team action column.
+It opens a **Remove from platform** confirmation that lists every affected
+organization and explains that the Keycloak identity and all access will be deleted.
+Customer administrators cannot permanently delete identities. The account menu
+opened from the user's initials links to the branded Keycloak account console
+for password, session, and other self-service identity management.
+
+The Add user form contains only first name, last name, email, and permitted
+applications. Its primary action is **Create user and send invitation**.
+
+The Control invitation landing page uses the short heading **Finish setting up
+your account** and one **Continue setup** action. It does not redirect on GET,
+so email security scanners cannot consume the Keycloak action. Only a confirmed
+POST reveals the action through an HTTP 303 redirect. Expired or used invitation
+links show a concise explanation directing the person to request a new
+invitation; they do not show Keycloak's generic **Back to application** link.
+
+**Not signed in yet** means the person has not completed their initial password
+action and first sign-in. It is the only setup notification shown to an
+administrator. Control determines this from Keycloak's password credential and
+forced password-change state, including for accounts created before this UI.
+New invitations persist the forced password action until setup is completed.
+The interface does not expose email-verification flags, required-action lists,
+credentials, OTP, WebAuthn, groups, raw roles, realm configuration, clients, or
+authentication flows. MFA and passwordless administration are outside the
+current PoC.
+
+## Local credential policy
+
+The approved PoC target has no AWS Secrets Manager dependency. The ControlT
+service-client credential, server session secret, invitation encryption key,
+and Postmark server token are stored only in:
+
+`/opt/go-portal/secrets/controlt.env`
+
+Required controls:
+
+- directory owned by `root:root` with mode `0700`;
+- file owned by `root:root` with mode `0600`;
+- values generated randomly on the host and never printed;
+- file excluded from Git, tickets, documentation, container images, and logs;
+- injected only into the ControlT container at startup;
+- credential rotation supported without recreating users; and
+- encrypted EC2 root volume retained as the storage boundary.
+
+The ControlT runtime and normal user-administration scripts must not read AWS
+Secrets Manager. New identity stacks generate their secrets locally on the
+encrypted instance, provision the restricted service client, and delete the
+one-time bootstrap identity before initialization completes. Removing Secrets
+Manager must not move secret values into CloudFormation parameters, GitHub
+Actions variables, source files, shell history, or public container metadata.
+
+## Availability requirement
+
+Normal user creation, invitation, resend, enable, disable, and application
+assignment must not stop or restart Keycloak. A one-time controlled maintenance
+operation may provision the ControlT service client. The offline
+`bootstrap-admin` recovery cycle is not part of normal ControlT operation.
+
+## Security and acceptance criteria
+
+The target is accepted only when tests demonstrate that:
+
+1. one UI action creates the user and causes Keycloak to submit the branded
+   setup email;
+2. the recipient can verify the email, create a password, and sign in directly
+   to an assigned application;
+3. no initial or temporary password is emailed;
+4. a customer administrator cannot view or modify another customer;
+5. unapproved application access is rejected server-side;
+6. duplicate and cross-organization email cases are safe and understandable;
+7. invitation resend preserves the existing user and permissions;
+8. failures return actionable messages and do not leave unintended access;
+9. administrative actions record actor, target, organization, operation, and
+   time without recording credentials or action links;
+10. customer administrators cannot reach the native Keycloak administration
+    console; and
+11. all normal administration operations complete without a Keycloak restart
+    or public 502 response;
+12. outbound email contains only the opaque ngenious invitation URL and never
+    the raw Keycloak action token; and
+13. a GET request from a mail scanner cannot activate or consume an invitation;
+    and
+14. a setup password is temporary, displayed once, never logged or persisted by
+    Control, and refused for active or disabled accounts.
+
+## Automated verification
+
+The pre-deployment suite runs entirely against isolated substitutes and cannot
+create a live identity or send an email. It verifies the user lifecycle and
+rollback rules, administrator and organization boundaries, approved-application
+enforcement, signed sessions, CSRF protection, request limits, safe error
+responses, security headers, logout invalidation, and cryptographic OIDC token
+validation. It also verifies encrypted invitation storage, expiry, MIME parsing,
+action-link replacement, Postmark submission, and the scanner-safe GET/POST
+confirmation boundary.
+
+Passing the automated suite authorizes deployment testing; it does not by
+itself satisfy the live-email and direct-application sign-in acceptance
+criteria above. Those checks are performed after deployment with a designated
+pilot account.
+
+## Transition
+
+The restricted service client and local credential path are ready, and the
+normal invitation workflow no longer uses AWS Secrets Manager or an offline
+bootstrap administrator. Deployment switches `controlt.ngenious.app` from the
+native console to ControlT only after the automated security suite and local
+health check pass. Live invitation and direct-application sign-in remain the
+post-deployment pilot acceptance step.

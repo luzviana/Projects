@@ -1,0 +1,13 @@
+{
+  "name": "ngenious-controlt",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "check": "node --check server.mjs && node --check lib/http-app.mjs && node --check lib/invitations.mjs && node --check lib/identity-mail-relay.mjs && node --check public/app.js && node test/backend.test.mjs && node test/invitations.test.mjs && node test/http.test.mjs && node test/security.test.mjs"
+  }
+}
