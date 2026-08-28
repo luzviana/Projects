@@ -27,6 +27,7 @@ unset ADMIN_JSON ADMIN_USER ADMIN_PASSWORD
 
 docker exec "$KEYCLOAK_CONTAINER" \
   /opt/keycloak/bin/kcadm.sh update "realms/$REALM" \
+    -s 'passwordPolicy=length(8) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)' \
     -s bruteForceProtected=true \
     -s permanentLockout=false \
     -s maxFailureWaitSeconds=900 \
@@ -38,5 +39,4 @@ docker exec "$KEYCLOAK_CONTAINER" \
 
 docker exec "$KEYCLOAK_CONTAINER" \
   /opt/keycloak/bin/kcadm.sh get "realms/$REALM" \
-    --fields realm,bruteForceProtected,permanentLockout,maxFailureWaitSeconds,minimumQuickLoginWaitSeconds,waitIncrementSeconds,failureFactor
-
+    --fields realm,passwordPolicy,bruteForceProtected,permanentLockout,maxFailureWaitSeconds,minimumQuickLoginWaitSeconds,waitIncrementSeconds,failureFactor

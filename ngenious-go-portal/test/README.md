@@ -28,6 +28,11 @@ administration layer that combines user creation, organization and application
 assignment, and Keycloak's setup-email action into one customer-safe workflow.
 It does not store passwords or implement authentication.
 
+The shared-test realm enforces the SSO-owned customer password policy: a minimum
+of 8 characters together with the configured uppercase, lowercase, digit, and
+special-character checks. Applications must redirect to SSO and must not add a
+different password-length requirement.
+
 ControlT's runtime and user-onboarding path use only the restricted service
 credential in the host's root-only `controlt.env`; they do not read AWS Secrets
 Manager or create offline recovery administrators.

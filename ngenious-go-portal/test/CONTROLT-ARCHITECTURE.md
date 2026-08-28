@@ -33,7 +33,7 @@ outbound email.
 Keycloak remains the identity engine and source of truth. It continues to own:
 
 - users and email-verification state;
-- password credentials and password policy;
+- password credentials and the approved minimum-eight-character password policy;
 - login, logout, sessions, cookies, and tokens;
 - organizations, memberships, roles, and application access;
 - required actions and expiring action tokens;
@@ -53,6 +53,8 @@ ControlT must never store or log passwords, validate them itself, issue identity
 tokens, implement login, or reproduce Keycloak authentication flows. It may
 generate a temporary setup password in memory and submit it directly to
 Keycloak when an administrator explicitly chooses temporary-password setup.
+Integrated applications also delegate password validation to Keycloak and must
+not impose or document a different password-length requirement.
 
 ## Components
 
